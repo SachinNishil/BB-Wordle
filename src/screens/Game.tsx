@@ -7,7 +7,7 @@ import { Keyboard } from '../components/Keyboard';
 import { Elapsed, SideCard } from '../components/Live';
 import { fromGameView, ResultsView } from '../components/Results';
 import { WordTiles } from '../components/Tiles';
-import { TauntLayer, TrashTalk } from '../components/TrashTalk';
+import { TrashTalk, useFeedTaunts } from '../components/TrashTalk';
 import { api, ApiError } from '../lib/api';
 import { serverNow } from '../lib/clock';
 import { loadDictionary } from '../lib/dictionary';
@@ -34,7 +34,7 @@ function phaseOf(g: GameView | null, loaded: boolean): Phase {
 
 export function GameScreen({ id }: { id?: string }) {
   const store = useStore();
-  const { slot, players, active, activeLoaded, pulse, ping, toast, reportError, setActive, partnerPresence } = store;
+  const { slot, players, active, activeLoaded, pulse, ping, toast, reportError, setActive, sendTyping, partnerTyping } = store;
   const [gameId, setGameId] = useState<string | null>(id ?? null);
   const [game, setGame] = useState<GameView | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -59,8 +59,6 @@ export function GameScreen({ id }: { id?: string }) {
 
   const me = slot ? players[slot] : null;
   const partner = slot ? players[(3 - slot) as 1 | 2] : null;
-  const partnerOnBoard = partnerPresence.some((p) => p.screen === 'game');
-  const partnerHere = partnerPresence.length > 0;
 
   // Lock on to the active game once we know it.
   useEffect(() => {
@@ -101,6 +99,7 @@ export function GameScreen({ id }: { id?: string }) {
   }, [reload, pulse]);
 
   const phase = phaseOf(game, loaded);
+  useFeedTaunts(game, slot);
   if (phase === 'playing') sawPlaying.current = true;
   const finishedNow = phase === 'finished' && revealRow === null;
 
@@ -110,6 +109,19 @@ export function GameScreen({ id }: { id?: string }) {
     const t = setTimeout(() => setWatch('partner'), sawPlaying.current ? 2400 : 0);
     return () => clearTimeout(t);
   }, [finishedNow, watch]);
+
+  // Live typing (v1.5): while my partner watches (they've finished), send the
+  // letters in my current row as I type them, and every few seconds so a
+  // partner who just opened spectator mode catches up.
+  const partnerDone = game?.partner.status === 'solved' || game?.partner.status === 'failed';
+  const myRow = game?.me.guess_count ?? 0;
+  const gid = game?.id;
+  useEffect(() => {
+    if (phase !== 'playing' || !partnerDone || !gid) return;
+    sendTyping(gid, myRow, typed);
+    const t = setInterval(() => sendTyping(gid, myRow, typed), 3000);
+    return () => clearInterval(t);
+  }, [phase, partnerDone, gid, myRow, typed, sendTyping]);
 
   // Flip in each new row my partner plays while I'm watching.
   const partnerCount = game?.partner.guesses ? game.partner.guesses.length : null;
@@ -409,7 +421,6 @@ export function GameScreen({ id }: { id?: string }) {
           {slot && <TrashTalk game={game} slot={slot} players={players} onGame={apply} variant="card" />}
           <button className="btn primary" onClick={() => go('/', true)}>Back home</button>
         </div>
-        {slot && <TauntLayer taunts={game.taunts} slot={slot} partner={partner} />}
       </div>
     );
   }
@@ -451,12 +462,12 @@ export function GameScreen({ id }: { id?: string }) {
             {game.partner_has_set ? (
               <>✅ {partner.name} has picked your word</>
             ) : (
-              <><span className="loader small" aria-hidden="true" /> {partner.name} is {partnerHere ? 'picking' : 'yet to pick'} a word for you</>
+              <><span className="loader small" aria-hidden="true" /> Waiting for {partner.name} to pick a word for you</>
             )}
           </p>
           {!picking && (
             <div className="stack">
-              {!partnerHere && <button className="btn soft" onClick={nudge}><Icon name="share" size={18} /> Send {partner.name} a nudge</button>}
+              <button className="btn soft" onClick={nudge}><Icon name="share" size={18} /> Send {partner.name} a nudge</button>
               <button className="btn text" onClick={cancel} disabled={busy}>Call off this challenge</button>
             </div>
           )}
@@ -504,14 +515,14 @@ export function GameScreen({ id }: { id?: string }) {
           <div className="waiting-couple">
             <Avatar player={me} size={76} ring />
             <span className="beat" aria-hidden="true">❤️</span>
-            <span className={`waiting-partner${partnerHere ? ' here' : ''}`}><Avatar player={partner} size={76} /></span>
+            <Avatar player={partner} size={76} ring />
           </div>
           <p className="eyebrow">{game.mode === 'challenge' ? "You're ready" : 'Waiting for player'}</p>
           <h2 className="waiting-title">Waiting for {partner.name}</h2>
           <p className="muted">
             {game.mode === 'challenge'
               ? `The countdown starts the moment ${partner.name} taps Ready.`
-              : partnerHere ? `${partner.name} has the app open. The countdown starts the moment ${partner.name} joins.` : `${partner.name} isn't in the app right now, and will see this game on opening it.`}
+              : `The countdown starts the moment ${partner.name} joins. Not in the app? Send a nudge.`}
           </p>
           <div className="stack">
             <button className="btn soft" onClick={nudge}><Icon name="share" size={18} /> Send {partner.name} a nudge</button>
@@ -530,17 +541,19 @@ export function GameScreen({ id }: { id?: string }) {
     const pg = game.partner.guesses ?? [];
     const notStarted = game.partner.status === 'waiting' || game.partner.status === 'ready';
     const theirWord = game.mode === 'challenge' ? game.partner_answer : game.answer;
+    const live = partnerTyping && partnerTyping.game === game.id && partnerTyping.row === pg.length
+      && game.partner.status === 'playing' && Date.now() - partnerTyping.at < 20000 ? partnerTyping.text : null;
     return (
       <div className="screen game spectate">
         <header className="topbar">
           <button className="iconbtn" onClick={() => back('/')} aria-label="Back"><Icon name="back" /></button>
-          <h1 className="topbar-title"><span className="live-pill"><i className="dot" /> Live</span> 👀 Watching {partner.name}</h1>
+          <h1 className="topbar-title">👀 Watching {partner.name}</h1>
           <div className="topbar-right" />
         </header>
         <div className="vs-strip">
           <SideCard player={me} view={game.me} isMe align="left" />
           <span className="vs-chip">VS</span>
-          <SideCard player={partner} view={game.partner} isMe={false} onBoard={partnerOnBoard} align="right" />
+          <SideCard player={partner} view={game.partner} isMe={false} align="right" />
         </div>
         <div className="segmented small spectate-tabs" role="tablist">
           <button role="tab" aria-selected={theirs} className={theirs ? 'on' : ''} onClick={() => setWatch('partner')}>{partner.name}'s board</button>
@@ -562,12 +575,12 @@ export function GameScreen({ id }: { id?: string }) {
           )}
         </div>
         {theirs ? (
-          <Board key="partner" guesses={pg} current="" revealRow={partnerReveal} shake={false} bounceRow={null} active={false} label={`${partner.name}'s guesses`} />
+          <Board key="partner" guesses={pg} current={live ?? ''} revealRow={partnerReveal} shake={false} bounceRow={null}
+            active={live !== null && partnerReveal === null} label={`${partner.name}'s guesses`} />
         ) : (
           <Board key="mine" guesses={game.me.guesses} current="" revealRow={null} shake={false} bounceRow={null} active={false} />
         )}
         <TrashTalk game={game} slot={slot} players={players} onGame={apply} variant="dock" />
-        <TauntLayer taunts={game.taunts} slot={slot} partner={partner} />
       </div>
     );
   }
@@ -581,7 +594,7 @@ export function GameScreen({ id }: { id?: string }) {
       <header className="topbar">
         <button className="iconbtn" onClick={() => back('/')} aria-label="Back"><Icon name="back" /></button>
         <h1 className="topbar-title">
-          <span className="live-pill"><i className="dot" /> Live</span> {game.mode === 'challenge' ? 'Challenge ⚔️' : `Game #${game.number}`}
+          {game.mode === 'challenge' ? 'Challenge ⚔️' : `Game #${game.number}`}
         </h1>
         <div className="topbar-right">
           {phase === 'playing' && (
@@ -593,7 +606,7 @@ export function GameScreen({ id }: { id?: string }) {
       <div className="vs-strip">
         <SideCard player={me} view={game.me} isMe align="left" />
         <span className="vs-chip">VS</span>
-        <SideCard player={partner} view={game.partner} isMe={false} onBoard={partnerOnBoard} align="right" />
+        <SideCard player={partner} view={game.partner} isMe={false} align="right" />
       </div>
       {game.partner.status === 'solved' && game.me.status !== 'solved' && game.me.status !== 'failed' && (
         <p className="partner-news">{game.mode === 'challenge' ? `🏆 ${partner.name} has solved the word you picked.` : "🏆 Your partner has solved today's word."}</p>
@@ -627,8 +640,6 @@ export function GameScreen({ id }: { id?: string }) {
       ) : (
         <Keyboard states={keyStates} onKey={onKey} disabled={phase !== 'playing' || submitting} />
       )}
-
-      {slot && <TauntLayer taunts={game.taunts} slot={slot} partner={partner} />}
 
       {phase === 'countdown' && cdTarget && (
         <Countdown target={cdTarget} onGo={begin}

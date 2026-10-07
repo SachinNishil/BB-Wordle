@@ -7,12 +7,18 @@
 // * Presence: each open app announces which player it is and which screen it
 //   is on, which powers "Menaka is on the board" and "Waiting for player".
 //
+// * Trash talk and live typing (v1.5) do carry data: the message itself,
+//   and the letters in the row your partner is typing. Typing is only sent
+//   once the other player has finished (they know the word by then), and
+//   trash talk is also stored in the database, so a missed message still
+//   arrives with the next refresh.
+//
 // If the channel can't connect (offline, Realtime disabled), the app falls
 // back to polling, so it degrades to "a few seconds late", never "stuck".
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { SUPABASE_URL } from './config';
 import { supabase } from './supabase';
-import type { Slot } from './types';
+import type { Slot, Taunt } from './types';
 
 export type ChangeKind = 'game' | 'words' | 'room';
 export type Screen = 'home' | 'game' | 'words' | 'stats' | 'history' | 'settings' | 'other';
@@ -22,6 +28,19 @@ export interface PresenceInfo {
   screen: Screen;
   device: string;
   at: number;
+}
+
+export interface TypingInfo {
+  game: string;
+  slot: Slot;
+  /** Which row they're on (0-based = guesses so far). */
+  row: number;
+  text: string;
+}
+
+export interface TauntPush {
+  game: string;
+  taunt: Taunt;
 }
 
 export interface Ping {
@@ -49,6 +68,8 @@ export class RoomChannel {
       onPing: (p: Ping) => void;
       onPresence: (others: PresenceInfo[]) => void;
       onStatus: (connected: boolean) => void;
+      onTaunt?: (t: TauntPush) => void;
+      onTyping?: (t: TypingInfo) => void;
     },
   ) {
     this.me = me;
@@ -62,6 +83,8 @@ export class RoomChannel {
       config: { broadcast: { self: false, ack: false }, presence: { key: this.me.device } },
     });
     ch.on('broadcast', { event: 'changed' }, ({ payload }) => this.handlers.onPing(payload as Ping));
+    ch.on('broadcast', { event: 'taunt' }, ({ payload }) => this.handlers.onTaunt?.(payload as TauntPush));
+    ch.on('broadcast', { event: 'typing' }, ({ payload }) => this.handlers.onTyping?.(payload as TypingInfo));
     ch.on('presence', { event: 'sync' }, () => {
       const state = ch.presenceState<PresenceInfo>();
       const all = Object.values(state).flat() as unknown as PresenceInfo[];
@@ -84,6 +107,16 @@ export class RoomChannel {
   ping(kind: ChangeKind, what?: string) {
     if (!this.channel || !this.connected) return;
     void this.channel.send({ type: 'broadcast', event: 'changed', payload: { kind, slot: this.me.slot, what } satisfies Ping });
+  }
+
+  taunt(t: TauntPush) {
+    if (!this.channel || !this.connected) return;
+    void this.channel.send({ type: 'broadcast', event: 'taunt', payload: t });
+  }
+
+  typing(t: TypingInfo) {
+    if (!this.channel || !this.connected) return;
+    void this.channel.send({ type: 'broadcast', event: 'typing', payload: t });
   }
 
   close() {

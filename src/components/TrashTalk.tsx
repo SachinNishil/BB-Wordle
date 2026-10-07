@@ -3,7 +3,8 @@
 // pop up on your partner's screen while they play.
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api';
-import type { GameView, Player, Slot, Taunt } from '../lib/types';
+import { feedTaunts, onNewTaunts } from '../lib/tauntFeed';
+import type { GameView, Player, Slot } from '../lib/types';
 import { useStore } from '../store';
 import { Avatar } from './Avatar';
 import { Icon } from './Icon';
@@ -35,7 +36,7 @@ export function TrashTalk({ game, slot, players, onGame, variant }: {
   onGame: (g: GameView) => void;
   variant: 'dock' | 'card';
 }) {
-  const { ping, reportError } = useStore();
+  const { ping, pushTaunt, reportError } = useStore();
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [showLines, setShowLines] = useState(false);
@@ -55,7 +56,13 @@ export function TrashTalk({ game, slot, players, onGame, variant }: {
     setSending(true);
     try {
       const r = await api.sendTaunt(slot, game.id, b.slice(0, TAUNT_MAX));
-      if (r.game) onGame(r.game);
+      if (r.game) {
+        onGame(r.game);
+        // Straight to their phone over the live channel, and a nudge to refresh
+        // in case that message gets lost (it's in the database either way).
+        const mine = [...(r.game.taunts ?? [])].reverse().find((t) => t.from === slot);
+        if (mine) pushTaunt(game.id, mine);
+      }
       ping('game', 'taunt');
       navigator.vibrate?.(12);
       if (b === text.trim()) setText('');
@@ -108,40 +115,49 @@ export function TrashTalk({ game, slot, players, onGame, variant }: {
 
 interface Bubble { id: number; body: string; emoji: boolean; x: number }
 
-/** Pops your partner's new messages up over the screen. Never blocks taps or typing. */
-export function TauntLayer({ taunts, slot, partner }: { taunts: Taunt[] | undefined; slot: Slot; partner: Player }) {
-  const seen = useRef<number | null>(null);
+/**
+ * Pops your partner's new messages up over whatever screen you're on (one
+ * instance, in App). Never blocks taps or typing. Fed by lib/tauntFeed.
+ */
+export function TauntLayer() {
+  const { slot, players } = useStore();
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
+  const partner = slot ? players[(3 - slot) as Slot] : null;
 
-  useEffect(() => {
-    if (!taunts) return;
-    const top = taunts.reduce((m, t) => Math.max(m, t.id), 0);
-    if (seen.current === null) {
-      seen.current = top; // don't replay old messages when the screen opens
-      return;
-    }
-    const fresh = taunts.filter((t) => t.id > seen.current! && t.from !== slot);
-    seen.current = Math.max(seen.current, top);
-    if (!fresh.length) return;
-    navigator.vibrate?.(25);
-    const add = fresh.slice(-4).map((t) => ({ id: t.id, body: t.body, emoji: isEmojiOnly(t.body), x: Math.round(Math.random() * 50 - 25) }));
-    setBubbles((b) => [...b, ...add].slice(-5));
-    for (const a of add) setTimeout(() => setBubbles((b) => b.filter((x) => x.id !== a.id)), a.emoji ? 2600 : 4200);
-  }, [taunts, slot]);
+  useEffect(
+    () =>
+      onNewTaunts((fresh) => {
+        navigator.vibrate?.(25);
+        const add = fresh.map((t, i) => ({ id: t.id, body: t.body, emoji: isEmojiOnly(t.body), x: Math.round(Math.random() * 50 - 25) + i * 4 }));
+        setBubbles((b) => [...b.filter((x) => !add.some((a) => a.id === x.id)), ...add].slice(-5));
+        for (const a of add) setTimeout(() => setBubbles((b) => b.filter((x) => x.id !== a.id)), a.emoji ? 2600 : 4200);
+      }),
+    [],
+  );
 
-  if (!bubbles.length) return null;
+  if (!bubbles.length || !partner) return null;
   return (
     <div className="taunt-layer" aria-live="polite">
-      {bubbles.map((b) => (
+      {bubbles.map((b) =>
         b.emoji ? (
-          <span key={b.id} className="taunt-emoji" style={{ ['--x' as string]: `${b.x}vw` }}>{b.body}</span>
+          <span key={b.id} className="taunt-emoji-wrap" style={{ transform: `translateX(${b.x}vw)` }}>
+            <span className="taunt-emoji">{b.body}</span>
+          </span>
         ) : (
           <span key={b.id} className="taunt-bubble">
             <Avatar player={partner} size={22} />
             <span><b>{partner.name}:</b> {b.body}</span>
           </span>
-        )
-      ))}
+        ),
+      )}
     </div>
   );
+}
+
+/** Lets a screen hand its latest copy of the game's trash talk to the feed. */
+export function useFeedTaunts(game: GameView | null, slot: Slot | null) {
+  const ids = (game?.taunts ?? []).map((t) => t.id).join(',');
+  useEffect(() => {
+    if (game) feedTaunts(game.id, game.taunts, slot);
+  }, [game?.id, ids, slot]); // eslint-disable-line react-hooks/exhaustive-deps
 }

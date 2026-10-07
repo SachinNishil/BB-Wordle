@@ -5,6 +5,8 @@ import { SUPABASE_ANON_KEY, SUPABASE_URL, isConfigured } from './config';
 export const supabase: SupabaseClient | null = isConfigured
   ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-      realtime: { params: { eventsPerSecond: 10 } },
+      // A short heartbeat notices a dead connection quickly (iPhones often keep a
+      // socket that looks open after the app has been in the background).
+      realtime: { params: { eventsPerSecond: 20 }, heartbeatIntervalMs: 12000 },
     })
   : null;

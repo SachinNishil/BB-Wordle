@@ -438,10 +438,7 @@ textarea { resize: vertical; min-height: 120px; font-family: ui-monospace, SFMon
 
 .waiting-body { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 12px; padding-top: 7dvh; }
 .waiting-couple { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
-.waiting-partner { opacity: 0.45; filter: grayscale(0.6); transition: opacity 300ms ease, filter 300ms ease; animation: breathe 2s ease-in-out infinite; border-radius: 50%; }
-.waiting-partner.here { opacity: 1; filter: none; }
 .beat { font-size: 1.6rem; animation: beat 1.6s ease-in-out infinite; }
-@keyframes breathe { 50% { transform: scale(0.95); } }
 .waiting-title { font-size: 1.9rem; }
 .waiting-couple.small { margin-bottom: 6px; gap: 12px; }
 .pick-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 10px; padding: 8px 0 14px; overflow-y: auto; }
@@ -700,8 +697,9 @@ textarea { resize: vertical; min-height: 120px; font-family: ui-monospace, SFMon
 .taunt-bubble .avatar { flex: none; }
 .taunt-emoji {
   font-size: 4.2rem; line-height: 1; filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.25));
-  animation: taunt-float 2600ms cubic-bezier(.2, .9, .3, 1) both;
+  display: inline-block; animation: taunt-float 2600ms cubic-bezier(.2, .9, .3, 1) both;
 }
+.taunt-emoji-wrap { display: block; }
 @keyframes taunt-in {
   0% { transform: translateY(-14px) scale(0.9); opacity: 0; }
   8% { transform: none; opacity: 1; }
@@ -709,11 +707,11 @@ textarea { resize: vertical; min-height: 120px; font-family: ui-monospace, SFMon
   100% { transform: translateY(-10px); opacity: 0; }
 }
 @keyframes taunt-float {
-  0% { transform: translate(var(--x), 60px) scale(0.4); opacity: 0; }
-  15% { transform: translate(var(--x), 0) scale(1.15); opacity: 1; }
-  30% { transform: translate(var(--x), -6px) scale(1); }
+  0% { transform: translateY(60px) scale(0.4); opacity: 0; }
+  15% { transform: translateY(0) scale(1.15); opacity: 1; }
+  30% { transform: translateY(-6px) scale(1); }
   75% { opacity: 1; }
-  100% { transform: translate(calc(var(--x) * 1.3), -90px) scale(0.9); opacity: 0; }
+  100% { transform: translateY(-90px) scale(0.9); opacity: 0; }
 }
 
 /* --------------------------------------------------------------- share image */

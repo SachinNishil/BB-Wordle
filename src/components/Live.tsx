@@ -18,31 +18,32 @@ export function Elapsed({ startedAt, durationMs }: { startedAt: string | null; d
   return <>{fmtDuration(Math.max(0, serverNow() - Date.parse(startedAt)))}</>;
 }
 
-export function statusLabel(p: MeView | PartnerView, isMe: boolean, onBoard?: boolean): { text: string; tone: string } {
+// No presence-based statuses ("Away", "Live") since v1.5: they were sometimes
+// wrong, and once a round has started the player is simply playing.
+export function statusLabel(p: MeView | PartnerView, isMe: boolean): { text: string; tone: string } {
   switch (p.status) {
     case 'solved':
       return { text: `Solved in ${p.guess_count}!`, tone: 'win' };
     case 'failed':
       return { text: p.gave_up ? 'Gave up' : 'Out of guesses', tone: 'lose' };
     case 'playing':
-      return { text: isMe ? 'Playing' : onBoard === false ? 'Away' : 'Playing', tone: 'live' };
+      return { text: 'Playing', tone: 'live' };
     case 'ready':
       return { text: 'Getting ready', tone: 'idle' };
     default:
-      return { text: isMe ? 'Joining' : 'Not here yet', tone: 'idle' };
+      return { text: isMe ? 'Joining' : 'Yet to start', tone: 'idle' };
   }
 }
 
 /** One side of the VS strip at the top of the game. */
-export function SideCard({ player, view, isMe, onBoard, align }: {
+export function SideCard({ player, view, isMe, align }: {
   player: Player;
   view: MeView | PartnerView;
   isMe: boolean;
-  onBoard?: boolean;
   align: 'left' | 'right';
 }) {
   const patterns = 'patterns' in view ? view.patterns : view.guesses.map((g) => g.pattern);
-  const st = statusLabel(view, isMe, onBoard);
+  const st = statusLabel(view, isMe);
   const attempt = view.status === 'playing' ? Math.min(view.guess_count + 1, 6) : view.guess_count;
   return (
     <div className={`side ${align} ${st.tone}`}>
@@ -59,7 +60,6 @@ export function SideCard({ player, view, isMe, onBoard, align }: {
           </span>
           <span className="side-time"><Elapsed startedAt={view.started_at} durationMs={view.duration_ms} /></span>
           <span className={`side-status ${st.tone}`}>
-            {st.tone === 'live' && <i className="dot" />}
             {st.text}
           </span>
         </div>

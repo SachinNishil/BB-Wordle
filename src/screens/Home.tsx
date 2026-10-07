@@ -31,7 +31,7 @@ export function historyLine(g: HistoryGame, players: Record<Slot, Player>) {
 }
 
 function GameCard() {
-  const { slot, players, active, activeLoaded, setActive, ping, reportError, partnerPresence } = useStore();
+  const { slot, players, active, activeLoaded, setActive, ping, reportError } = useStore();
   const [starting, setStarting] = useState<GameMode | null>(null);
   if (!slot) return null;
   const me = players[slot];
@@ -82,10 +82,10 @@ function GameCard() {
     );
   }
 
-  return <ActiveCard game={active} me={me} partner={partner} partnerHere={partnerPresence.length > 0} />;
+  return <ActiveCard game={active} me={me} partner={partner} />;
 }
 
-function ActiveCard({ game, me, partner, partnerHere }: { game: GameView; me: Player; partner: Player; partnerHere: boolean }) {
+function ActiveCard({ game, me, partner }: { game: GameView; me: Player; partner: Player }) {
   const mineDone = game.me.status === 'solved' || game.me.status === 'failed';
   const challenge = game.mode === 'challenge';
   const invitedMe = !challenge && !game.me.joined_at && game.created_by !== me.slot;
@@ -114,7 +114,7 @@ function ActiveCard({ game, me, partner, partnerHere }: { game: GameView; me: Pl
   } else if (game.status === 'waiting') {
     eyebrow = 'Waiting for player';
     title = `Waiting for ${partner.name}`;
-    note = partnerHere ? `${partner.name} has the app open.` : `${partner.name} will see it on opening the app.`;
+    note = `${partner.name} will see it on opening the app.`;
   } else {
     if (challenge) eyebrow = 'Challenge ⚔️ · live';
     if (mineDone) {

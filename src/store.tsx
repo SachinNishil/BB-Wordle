@@ -1,8 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api, ApiError, friendlyError } from './lib/api';
 import { deviceId, getSlot, setSlot as saveSlot, stripLegacyInvite } from './lib/identity';
-import { RoomChannel, type ChangeKind, type PresenceInfo, type Screen } from './lib/realtime';
-import type { GameView, HistoryGame, Player, Slot } from './lib/types';
+import { RoomChannel, type ChangeKind, type PresenceInfo, type Screen, type TypingInfo } from './lib/realtime';
+import { feedTaunts } from './lib/tauntFeed';
+import type { GameView, HistoryGame, Player, Slot, Taunt } from './lib/types';
 import { load, save } from './lib/storage';
 import { APP_VERSION } from './lib/versions';
 import { go, useRoute } from './router';
@@ -28,6 +29,8 @@ interface Store {
   realtime: boolean;
   partnerPresence: PresenceInfo[];
   toasts: Toast[];
+  /** What my partner is typing right now (spectator mode, v1.5). */
+  partnerTyping: (TypingInfo & { at: number }) | null;
 
   chooseSlot: (s: Slot) => void;
   setPlayers: (p: Player[]) => void;
@@ -35,6 +38,10 @@ interface Store {
   refreshActive: () => Promise<void>;
   setActive: (g: GameView | null) => void;
   ping: (kind: ChangeKind, what?: string) => void;
+  /** Push a trash talk message straight to the partner's phone. */
+  pushTaunt: (game: string, t: Taunt) => void;
+  /** Send the letters in my current row (only used while my partner spectates). */
+  sendTyping: (game: string, row: number, text: string) => void;
   toast: (text: string, tone?: Toast['tone'], action?: Toast['action']) => void;
   dismissToast: (id: number) => void;
   reportError: (e: unknown) => void;
@@ -71,6 +78,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [realtime, setRealtime] = useState(false);
   const [presence, setPresence] = useState<PresenceInfo[]>([]);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [partnerTyping, setPartnerTyping] = useState<Store['partnerTyping']>(null);
+  // Bumped to rebuild the live channel after the app comes back from the background.
+  const [channelGen, setChannelGen] = useState(0);
   const channel = useRef<RoomChannel | null>(null);
   const toastId = useRef(0);
   const prevActive = useRef<GameView | null>(null);
@@ -117,6 +127,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     try {
       const s = await api.getGameState(slot);
       setActive(s.game);
+      if (s.game) feedTaunts(s.game.id, s.game.taunts, slot);
       setOnline(true);
     } catch (e) {
       if (e instanceof ApiError && e.network) setOnline(false);
@@ -142,6 +153,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [toast]);
 
   const ping = useCallback((kind: ChangeKind, what?: string) => channel.current?.ping(kind, what), []);
+  const pushTaunt = useCallback((game: string, taunt: Taunt) => channel.current?.taunt({ game, taunt }), []);
+  const sendTyping = useCallback(
+    (game: string, row: number, text: string) => {
+      if (slot) channel.current?.typing({ game, slot, row, text });
+    },
+    [slot],
+  );
 
   // Initial load.
   useEffect(() => {
@@ -176,7 +194,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           }
           if (p.kind === 'room') void refreshRoom();
         },
-        onPresence: (others) => setPresence(others),
+        onTaunt: (p) => {
+          if (p?.taunt && p.taunt.from !== slot) feedTaunts(p.game, [p.taunt], slot);
+        },
+        onTyping: (t) => {
+          if (t && t.slot !== slot) setPartnerTyping({ ...t, at: Date.now() });
+        },
+        onPresence: (others) => {
+          setPresence(others);
+          // Partner moved screens (e.g. into a game): a cheap moment to catch up.
+          void refreshActive();
+        },
         onStatus: (ok) => {
           setRealtime(ok);
           if (ok) {
@@ -194,7 +222,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       channel.current = null;
       setRealtime(false);
     };
-  }, [slot, refreshActive, refreshRoom, refreshHistory, toast]);
+  }, [slot, refreshActive, refreshRoom, refreshHistory, toast, channelGen]);
 
   // Tell the partner which screen we're on.
   const screen = screenFor(route.path);
@@ -205,33 +233,54 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // Polling safety net: fast when realtime is down, slow when it's up.
   useEffect(() => {
     if (!slot) return;
-    const ms = realtime ? (screen === 'game' ? 15000 : 30000) : screen === 'game' ? 2500 : 8000;
+    // While one of you has finished and the other is still going, trash talk
+    // and spectating need to feel live even if the channel has quietly dropped.
+    const done = (x?: string) => x === 'solved' || x === 'failed';
+    const hot = !!active && done(active.me.status) !== done(active.partner.status);
+    const ms = hot ? 3000 : realtime ? (screen === 'game' ? 10000 : 15000) : screen === 'game' ? 2500 : 8000;
     const t = setInterval(() => {
       if (document.visibilityState !== 'visible') return;
       setPulse((x) => x + 1);
       void refreshActive();
     }, ms);
     return () => clearInterval(t);
-  }, [slot, realtime, screen, refreshActive]);
+  }, [slot, realtime, screen, refreshActive, active?.me.status, active?.partner.status]); // eslint-disable-line
 
   // Coming back to the app or back online: refresh everything.
   useEffect(() => {
+    let hiddenAt = 0;
     const wake = () => {
-      if (document.visibilityState !== 'visible') return;
+      if (document.visibilityState !== 'visible') {
+        hiddenAt = Date.now();
+        return;
+      }
+      // Back after a while: the old connection may look alive but be dead
+      // (common on iPhones), so start a fresh one.
+      if (hiddenAt && Date.now() - hiddenAt > 4000) setChannelGen((x) => x + 1);
+      hiddenAt = 0;
       setPulse((x) => x + 1);
       void refreshActive();
       void refreshRoom();
     };
     const up = () => {
       setOnline(true);
+      setChannelGen((x) => x + 1);
       wake();
     };
     const down = () => setOnline(false);
+    const shown = (e: PageTransitionEvent) => {
+      if (e.persisted) {
+        setChannelGen((x) => x + 1);
+        setPulse((x) => x + 1);
+      }
+    };
     document.addEventListener('visibilitychange', wake);
+    window.addEventListener('pageshow', shown);
     window.addEventListener('online', up);
     window.addEventListener('offline', down);
     return () => {
       document.removeEventListener('visibilitychange', wake);
+      window.removeEventListener('pageshow', shown);
       window.removeEventListener('online', up);
       window.removeEventListener('offline', down);
     };
@@ -263,12 +312,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       refreshActive,
       setActive,
       ping,
+      pushTaunt,
+      sendTyping,
+      partnerTyping,
       toast,
       dismissToast,
       reportError,
     }),
     [slot, players, history, active, activeLoaded, pulse, online, realtime, presence, toasts,
-      chooseSlot, setPlayers, refreshHistory, refreshActive, setActive, ping, toast, dismissToast, reportError],
+      chooseSlot, setPlayers, refreshHistory, refreshActive, setActive, ping, pushTaunt, sendTyping, partnerTyping, toast, dismissToast, reportError],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

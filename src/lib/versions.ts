@@ -9,6 +9,17 @@ export interface Release {
 
 export const VERSIONS: Release[] = [
   {
+    version: '1.5.0',
+    date: '2026-10-07',
+    changes: [
+      'Spectator mode now shows your partner typing, letter by letter, before they even press Enter.',
+      'Trash talk always gets through: it pops up on any screen (not just the game), arrives straight away over the live connection, and turns up within a few seconds even when an iPhone has quietly dropped that connection. Messages sent while the app was closed pop up when it opens.',
+      'Classic now picks from about 2,000 everyday words. Obscure and brand-new words still count as guesses, they just never come up as the answer.',
+      'Removed the "Away" and "Live" labels, which were sometimes wrong. Once a round starts, the other player simply shows as Playing.',
+      'On the waiting screen only the heart beats now; your photos stay still.',
+    ],
+  },
+  {
     version: '1.4.0',
     date: '2026-10-07',
     changes: [

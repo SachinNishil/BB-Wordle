@@ -1,4 +1,5 @@
 import { Toasts } from './components/Toasts';
+import { TauntLayer } from './components/TrashTalk';
 import { isConfigured } from './lib/config';
 import { useRoute } from './router';
 import { GameScreen } from './screens/Game';
@@ -38,6 +39,7 @@ export function App() {
         <Routes />
       </div>
       <Toasts />
+      <TauntLayer />
     </StoreProvider>
   );
 }
