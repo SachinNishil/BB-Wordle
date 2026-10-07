@@ -10,6 +10,7 @@
 // If the channel can't connect (offline, Realtime disabled), the app falls
 // back to polling, so it degrades to "a few seconds late", never "stuck".
 import type { RealtimeChannel } from '@supabase/supabase-js';
+import { SUPABASE_URL } from './config';
 import { supabase } from './supabase';
 import type { Slot } from './types';
 
@@ -29,9 +30,9 @@ export interface Ping {
   what?: string;
 }
 
-async function topicFor(roomKey: string) {
-  // The channel name is derived from the room key but doesn't reveal it.
-  const bytes = new TextEncoder().encode('bb-wordle-channel:' + roomKey);
+async function topicFor() {
+  // One shared channel for the two of you, named after this Supabase project.
+  const bytes = new TextEncoder().encode('bb-wordle-channel:' + SUPABASE_URL);
   const digest = await crypto.subtle.digest('SHA-256', bytes);
   return 'bbw-' + [...new Uint8Array(digest)].slice(0, 12).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
@@ -43,7 +44,6 @@ export class RoomChannel {
   connected = false;
 
   constructor(
-    private roomKey: string,
     me: PresenceInfo,
     private handlers: {
       onPing: (p: Ping) => void;
@@ -56,7 +56,7 @@ export class RoomChannel {
 
   async open() {
     if (!supabase) return;
-    const topic = await topicFor(this.roomKey);
+    const topic = await topicFor();
     if (this.closed) return;
     const ch = supabase.channel(topic, {
       config: { broadcast: { self: false, ack: false }, presence: { key: this.me.device } },

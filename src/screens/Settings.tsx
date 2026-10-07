@@ -4,7 +4,6 @@ import { Icon } from '../components/Icon';
 import { TopBar } from '../components/TopBar';
 import { api } from '../lib/api';
 import { APP_VERSION } from '../lib/config';
-import { inviteLink } from '../lib/identity';
 import { photoToDataUrl } from '../lib/photo';
 import { getTheme, setTheme, type ThemeChoice } from '../lib/theme';
 import type { Slot } from '../lib/types';
@@ -28,17 +27,16 @@ export function PlayerPicker({ value, onChange }: { value: Slot | null; onChange
 }
 
 function ProfileRow({ slot }: { slot: Slot }) {
-  const { roomKey, players, setPlayers, ping, reportError, toast } = useStore();
+  const { players, setPlayers, ping, reportError, toast } = useStore();
   const p = players[slot];
   const [name, setName] = useState(p.name);
   const [busy, setBusy] = useState(false);
   const file = useRef<HTMLInputElement>(null);
 
   async function save(photo: string | null, clear = false, newName: string | null = null) {
-    if (!roomKey) return;
     setBusy(true);
     try {
-      const r = await api.updatePlayer(roomKey, slot, newName, photo, clear);
+      const r = await api.updatePlayer(slot, newName, photo, clear);
       setPlayers(r.players);
       ping('room');
     } catch (e) {
@@ -78,24 +76,8 @@ function ProfileRow({ slot }: { slot: Slot }) {
 }
 
 export function SettingsScreen() {
-  const { slot, chooseSlot, roomKey, partner, players, forgetRoom, toast, realtime } = useStore();
+  const { slot, chooseSlot, players, toast, realtime } = useStore();
   const [theme, setThemeState] = useState<ThemeChoice>(getTheme());
-  const [confirmForget, setConfirmForget] = useState(false);
-
-  async function invite() {
-    if (!roomKey) return;
-    const link = inviteLink(roomKey);
-    const text = `Come play Wordle with me! Open this on your phone, then add it to your home screen: ${link}`;
-    try {
-      if (navigator.share) await navigator.share({ text });
-      else {
-        await navigator.clipboard.writeText(link);
-        toast('Invite link copied');
-      }
-    } catch {
-      /* cancelled */
-    }
-  }
 
   return (
     <div className="screen scroll">
@@ -114,12 +96,6 @@ export function SettingsScreen() {
       </section>
 
       <section className="card">
-        <h3>Invite {partner?.name ?? 'your partner'}</h3>
-        <p className="muted small">The link connects a phone to your private room. Only share it with {partner?.name ?? 'your partner'}.</p>
-        <button className="btn soft" onClick={invite}><Icon name="link" size={18} /> Share invite link</button>
-      </section>
-
-      <section className="card">
         <h3>Appearance</h3>
         <div className="segmented">
           {(['system', 'light', 'dark'] as ThemeChoice[]).map((t) => (
@@ -135,17 +111,6 @@ export function SettingsScreen() {
         <h3>This phone</h3>
         <p className="muted small">Live sync: {realtime ? 'connected' : 'reconnecting (updates every few seconds)'} · Version {APP_VERSION}</p>
         <button className="btn text small" onClick={() => go('/versions')}>Version history</button>
-        {!confirmForget ? (
-          <button className="btn text danger-text" onClick={() => setConfirmForget(true)}>Disconnect this phone from the room</button>
-        ) : (
-          <div className="confirm">
-            <p className="small">This phone will need the invite link again. Games and words are not affected.</p>
-            <div className="modal-actions">
-              <button className="btn ghost" onClick={() => setConfirmForget(false)}>Keep</button>
-              <button className="btn danger" onClick={() => { forgetRoom(); go('/', true); }}>Disconnect</button>
-            </div>
-          </div>
-        )}
       </section>
     </div>
   );

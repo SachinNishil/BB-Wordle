@@ -16,7 +16,7 @@ function game(answer: string, addedBy: Slot, p1: HistoryPlayer, p2: HistoryPlaye
   const winner = s(p1) < s(p2) ? 1 : s(p2) < s(p1) ? 2 : null;
   const result = winner ? 'win' : p1.status === 'solved' ? 'draw' : 'both_failed';
   return { id: String(n), number: n, created_at: new Date(2026, 9, n).toISOString(), created_by: 1, starts_at: null,
-    completed_at: new Date(2026, 9, n).toISOString(), word: answer, word_added_by: addedBy, winner: winner as Slot | null, result, players: [p1, p2] };
+    completed_at: new Date(2026, 9, n).toISOString(), mode: 'classic', word: answer, word_added_by: addedBy, word_for_1: answer, word_for_2: answer, winner: winner as Slot | null, result, players: [p1, p2] };
 }
 const T = 1_800_000_000_000;
 const games: HistoryGame[] = [
@@ -113,4 +113,29 @@ it('awards', () => {
   expect(a.speed.value).toBe('Sachin'); // 80s vs 96.25s
   expect(a.setter.value).toBe('Tied');
   expect(a.hardest.value).toBe('Menaka'); // HOUSE 4, JAZZY 6 -> 5 vs 4.33
+});
+
+describe('challenge mode', () => {
+  // Sachin picked JAZZY for Menaka (she failed); Menaka picked CRANE for Sachin (he took 3).
+  const ch: HistoryGame = {
+    id: 'c1', number: 99, created_at: '', created_by: 1, starts_at: null, completed_at: new Date(2026, 9, 20).toISOString(),
+    mode: 'challenge', word: null, word_added_by: null, word_for_1: 'CRANE', word_for_2: 'JAZZY', winner: 1, result: 'win',
+    players: [round(1, 'CRANE', ['SLATE', 'TRACE', 'CRANE'], 50_000, T), round(2, 'JAZZY', ['AUDIO', 'TRAIN', 'PIZZA', 'FIZZY', 'DIZZY', 'TIZZY'], 90_000, T)],
+  };
+  const all = [...games, ch];
+  it('is left out of word difficulty and setter stats', () => {
+    expect(wordDifficulties(all).find((w) => w.word === 'CRANE')?.plays).toBe(1);
+    expect(setterStats(all, words, 1).played).toBe(3);
+  });
+  it('counts in player stats and head to head, split by mode', () => {
+    expect(playerStats(all, 1).played).toBe(6);
+    const h = headToHead(all);
+    expect(h.wins[1]).toBe(3);
+    expect(h.byMode.challenge).toEqual({ games: 1, wins: { 1: 1, 2: 0 }, draws: 0 });
+    expect(h.byMode.classic.games).toBe(5);
+  });
+  it('awards the toughest challenger', () => {
+    const a = Object.fromEntries(awards(all, words, { 1: 'Sachin', 2: 'Menaka' }, (ms) => `${ms}`).map((x) => [x.id, x]));
+    expect(a.challenger.value).toBe('Sachin'); // Menaka needed 7 (failed) vs Sachin 3
+  });
 });

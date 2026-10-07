@@ -17,20 +17,23 @@ import { useStore } from '../store';
 
 const PRAISE = ['Genius!', 'Magnificent!', 'Impressive!', 'Splendid!', 'Great!', 'Phew!'];
 
-type Phase = 'loading' | 'none' | 'waiting' | 'countdown' | 'playing' | 'finished' | 'results';
+type Phase = 'loading' | 'none' | 'setting' | 'readycheck' | 'waiting' | 'countdown' | 'playing' | 'finished' | 'results';
 
 function phaseOf(g: GameView | null, loaded: boolean): Phase {
   if (!g) return loaded ? 'none' : 'loading';
   if (g.status === 'completed') return 'results';
   if (g.me.status === 'solved' || g.me.status === 'failed') return 'finished';
   if (g.me.status === 'playing') return 'playing';
+  if (g.status === 'setting') return 'setting';
+  // Challenge: once both words are in, each of you taps Ready.
+  if (g.mode === 'challenge' && g.status === 'waiting' && !g.me.joined_at) return 'readycheck';
   if (g.status === 'waiting' || !g.starts_at) return 'waiting';
   return 'countdown';
 }
 
 export function GameScreen({ id }: { id?: string }) {
   const store = useStore();
-  const { roomKey, slot, players, active, activeLoaded, pulse, words, ping, toast, reportError, setActive, partnerPresence } = store;
+  const { slot, players, active, activeLoaded, pulse, words, ping, toast, reportError, setActive, partnerPresence } = store;
   const [gameId, setGameId] = useState<string | null>(id ?? null);
   const [game, setGame] = useState<GameView | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -42,6 +45,8 @@ export function GameScreen({ id }: { id?: string }) {
   const [cdTarget, setCdTarget] = useState<number | null>(null);
   const [confirmGiveUp, setConfirmGiveUp] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [pick, setPick] = useState('');
+  const [changing, setChanging] = useState(false);
   const joining = useRef(false);
   const beginning = useRef(false);
   const prevPartner = useRef<string | null>(null);
@@ -66,13 +71,13 @@ export function GameScreen({ id }: { id?: string }) {
   );
 
   const reload = useCallback(async () => {
-    if (!roomKey || !slot) return;
+    if (!slot) return;
     if (!gameId) {
       if (activeLoaded && !active) setLoaded(true);
       return;
     }
     try {
-      const s = await api.getGameState(roomKey, slot, gameId);
+      const s = await api.getGameState(slot, gameId);
       if (!s.game) {
         setGame(null);
         setLoaded(true);
@@ -83,7 +88,7 @@ export function GameScreen({ id }: { id?: string }) {
     } catch (e) {
       if (!(e instanceof ApiError && e.network)) reportError(e);
     }
-  }, [roomKey, slot, gameId, active, activeLoaded, reportError]);
+  }, [slot, gameId, active, activeLoaded, reportError]);
 
   useEffect(() => {
     void reload();
@@ -93,18 +98,19 @@ export function GameScreen({ id }: { id?: string }) {
 
   // Opening the game screen means "I'm here".
   useEffect(() => {
-    if (!game || !roomKey || !slot || joining.current) return;
+    if (!game || !slot || joining.current) return;
     if (game.status === 'completed' || game.me.joined_at) return;
+    if (game.mode === 'challenge') return; // challenge: joining is the Ready button
     joining.current = true;
     api
-      .joinGame(roomKey, slot, game.id)
+      .joinGame(slot, game.id)
       .then((s) => {
         apply(s.game);
         ping('game', 'joined');
       })
       .catch(reportError)
       .finally(() => (joining.current = false));
-  }, [game, roomKey, slot, apply, ping, reportError]);
+  }, [game, slot, apply, ping, reportError]);
 
   // Decide the countdown: the shared one if we're on time, a personal one if we arrive late.
   useEffect(() => {
@@ -120,11 +126,11 @@ export function GameScreen({ id }: { id?: string }) {
   }, [phase, game?.starts_at]);
 
   const begin = useCallback(async () => {
-    if (!game || !roomKey || !slot || beginning.current) return;
+    if (!game || !slot || beginning.current) return;
     beginning.current = true;
     const attempt = async (tries: number): Promise<void> => {
       try {
-        const s = await api.beginRound(roomKey, slot, game.id);
+        const s = await api.beginRound(slot, game.id);
         apply(s.game);
         ping('game', 'began');
       } catch (e) {
@@ -138,7 +144,7 @@ export function GameScreen({ id }: { id?: string }) {
     };
     await attempt(0);
     beginning.current = false;
-  }, [game, roomKey, slot, apply, ping, reportError, reload]);
+  }, [game, slot, apply, ping, reportError, reload]);
 
   // Partner news, once each.
   useEffect(() => {
@@ -154,7 +160,7 @@ export function GameScreen({ id }: { id?: string }) {
     } else if (now === 'failed' && stillGoing) {
       toast(`${partner.name} ran out of guesses`, 'info');
     } else if (before === 'waiting' && (now === 'ready' || now === 'playing')) {
-      toast(`${partner.name} is here`, 'info');
+      toast(game.mode === 'challenge' ? `${partner.name} is ready` : `${partner.name} is here`, 'info');
     }
   }, [game, partner, toast]);
 
@@ -172,7 +178,7 @@ export function GameScreen({ id }: { id?: string }) {
   );
 
   const submit = useCallback(async () => {
-    if (!game || !roomKey || !slot) return;
+    if (!game || !slot) return;
     const word = typed;
     if (word.length < 5) return doShake('Not enough letters');
     const dict = await loadDictionary();
@@ -180,7 +186,7 @@ export function GameScreen({ id }: { id?: string }) {
     setSubmitting(true);
     const row = game.me.guess_count;
     try {
-      const r = await api.submitGuess(roomKey, slot, game.id, word, row + 1);
+      const r = await api.submitGuess(slot, game.id, word, row + 1);
       setTyped('');
       setRevealRow(row);
       apply(r.game);
@@ -210,22 +216,71 @@ export function GameScreen({ id }: { id?: string }) {
     } finally {
       setSubmitting(false);
     }
-  }, [game, roomKey, slot, typed, allowed, apply, ping, toast, doShake, reportError, reload]);
+  }, [game, slot, typed, allowed, apply, ping, toast, doShake, reportError, reload]);
+
+  const picking = phase === 'setting' && !!game && (!game.i_have_set || changing);
+
+  const submitPick = useCallback(async () => {
+    if (!game || !slot) return;
+    if (pick.length < 5) return doShake('Not enough letters');
+    const dict = await loadDictionary();
+    if (dict.size > 0 && !dict.has(pick) && !allowed.has(pick)) return doShake('Not in word list');
+    setSubmitting(true);
+    try {
+      const r = await api.setChallengeWord(slot, game.id, pick);
+      apply(r.game);
+      setChanging(false);
+      setPick('');
+      ping('game', 'word-set');
+      toast(`${pick} is set for ${partner?.name ?? 'your partner'}`, 'win');
+    } catch (e) {
+      if (e instanceof ApiError && e.code === 'not_a_word') doShake('Not in word list');
+      else {
+        reportError(e);
+        void reload();
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  }, [game, slot, pick, allowed, apply, ping, toast, doShake, reportError, reload, partner]);
+
+  async function ready() {
+    if (!game || !slot) return;
+    setBusy(true);
+    try {
+      const s = await api.joinGame(slot, game.id);
+      apply(s.game);
+      ping('game', 'joined');
+    } catch (e) {
+      reportError(e);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   const onKey = useCallback(
     (k: string) => {
+      if (picking && !submitting) {
+        if (k === 'Enter') void submitPick();
+        else if (k === 'Backspace') setPick((t) => t.slice(0, -1));
+        else if (/^[a-z]$/i.test(k)) setPick((t) => (t.length < 5 ? t + k.toUpperCase() : t));
+        return;
+      }
       if (phase !== 'playing' || submitting || revealing) return;
       if (k === 'Enter') void submit();
       else if (k === 'Backspace') setTyped((t) => t.slice(0, -1));
       else if (/^[a-z]$/i.test(k)) setTyped((t) => (t.length < 5 ? t + k.toUpperCase() : t));
     },
-    [phase, submitting, revealing, submit],
+    [phase, submitting, revealing, submit, picking, submitPick],
   );
 
   // Physical keyboard.
   const keyRef = useRef(onKey);
   keyRef.current = onKey;
   useEffect(() => {
+    // The button that brought us here may still hold focus while disabled,
+    // which makes the browser drop the first keystroke. Let it go.
+    (document.activeElement as HTMLElement | null)?.blur?.();
     const h = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       const t = e.target as HTMLElement | null;
@@ -240,10 +295,10 @@ export function GameScreen({ id }: { id?: string }) {
   }, []);
 
   async function playNow() {
-    if (!game || !roomKey || !slot) return;
+    if (!game || !slot) return;
     setBusy(true);
     try {
-      const s = await api.joinGame(roomKey, slot, game.id, true);
+      const s = await api.joinGame(slot, game.id, true);
       apply(s.game);
       ping('game', 'began');
     } catch (e) {
@@ -254,10 +309,10 @@ export function GameScreen({ id }: { id?: string }) {
   }
 
   async function cancel() {
-    if (!game || !roomKey || !slot) return;
+    if (!game || !slot) return;
     setBusy(true);
     try {
-      await api.cancelGame(roomKey, slot, game.id);
+      await api.cancelGame(slot, game.id);
       setActive(null);
       ping('game', 'cancelled');
       go('/', true);
@@ -270,10 +325,10 @@ export function GameScreen({ id }: { id?: string }) {
   }
 
   async function giveUp() {
-    if (!game || !roomKey || !slot) return;
+    if (!game || !slot) return;
     setConfirmGiveUp(false);
     try {
-      const s = await api.giveUp(roomKey, slot, game.id);
+      const s = await api.giveUp(slot, game.id);
       apply(s.game);
       ping('game', 'finished');
     } catch (e) {
@@ -332,6 +387,84 @@ export function GameScreen({ id }: { id?: string }) {
     );
   }
 
+  if (phase === 'setting' && game) {
+    return (
+      <div className="screen game pick-screen">
+        <header className="topbar">
+          <button className="iconbtn" onClick={() => back('/')} aria-label="Back"><Icon name="back" /></button>
+          <h1 className="topbar-title">Challenge ⚔️</h1>
+          <div className="topbar-right" />
+        </header>
+        <div className="pick-body">
+          <div className="waiting-couple small">
+            <Avatar player={me} size={52} ring />
+            <span className="pick-arrow" aria-hidden="true">⚔️</span>
+            <Avatar player={partner} size={52} />
+          </div>
+          {picking ? (
+            <>
+              <p className="eyebrow">Your word for {partner.name}</p>
+              <h2 className="waiting-title">Pick a word for {partner.name}</h2>
+              <p className="muted small">{partner.name} gets 6 guesses to find it. Any real 5-letter word works.</p>
+              <div className={`row pick-row${shake ? ' shake' : ''}`} style={{ ['--tile' as string]: '54px' }} aria-label="Your word">
+                {[0, 1, 2, 3, 4].map((i) => (
+                  <div key={i} className={`tile ${pick[i] ? 'filled' : ''}`}>{pick[i] ?? ''}</div>
+                ))}
+              </div>
+              {changing && <button className="btn text small" onClick={() => { setChanging(false); setPick(''); }}>Keep {game.my_challenge_word}</button>}
+            </>
+          ) : (
+            <>
+              <p className="eyebrow">Your word for {partner.name}</p>
+              <WordTiles word={game.my_challenge_word ?? ''} size={46} />
+              <button className="btn text small" onClick={() => setChanging(true)}>Change word</button>
+            </>
+          )}
+          <p className={`pick-status${game.partner_has_set ? ' done' : ''}`}>
+            {game.partner_has_set ? (
+              <>✅ {partner.name} has picked your word</>
+            ) : (
+              <><span className="loader small" aria-hidden="true" /> {partner.name} is {partnerHere ? 'picking' : 'yet to pick'} a word for you</>
+            )}
+          </p>
+          {!picking && (
+            <div className="stack">
+              {!partnerHere && <button className="btn soft" onClick={nudge}><Icon name="share" size={18} /> Send {partner.name} a nudge</button>}
+              <button className="btn text" onClick={cancel} disabled={busy}>Call off this challenge</button>
+            </div>
+          )}
+        </div>
+        {picking && <Keyboard states={{}} onKey={onKey} disabled={submitting} />}
+      </div>
+    );
+  }
+
+  if (phase === 'readycheck' && game) {
+    return (
+      <div className="screen waiting">
+        <header className="topbar">
+          <button className="iconbtn" onClick={() => back('/')} aria-label="Back"><Icon name="back" /></button>
+          <h1 className="topbar-title">Challenge ⚔️</h1>
+          <div className="topbar-right" />
+        </header>
+        <div className="waiting-body">
+          <div className="waiting-couple">
+            <Avatar player={me} size={76} ring />
+            <span className="beat" aria-hidden="true">⚔️</span>
+            <Avatar player={partner} size={76} ring />
+          </div>
+          <p className="eyebrow">Both words are in</p>
+          <h2 className="waiting-title">Ready?</h2>
+          <p className="muted">You gave {partner.name} <b>{game.my_challenge_word}</b>. {partner.name} picked yours. The countdown starts when you're both ready.</p>
+          <div className="stack">
+            <button className="btn primary big" onClick={ready} disabled={busy}>I'M READY</button>
+            <button className="btn text" onClick={cancel} disabled={busy}>Call off this challenge</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (phase === 'waiting' && game) {
     return (
       <div className="screen waiting">
@@ -346,10 +479,12 @@ export function GameScreen({ id }: { id?: string }) {
             <span className="beat" aria-hidden="true">❤️</span>
             <span className={`waiting-partner${partnerHere ? ' here' : ''}`}><Avatar player={partner} size={76} /></span>
           </div>
-          <p className="eyebrow">Waiting for player</p>
+          <p className="eyebrow">{game.mode === 'challenge' ? "You're ready" : 'Waiting for player'}</p>
           <h2 className="waiting-title">Waiting for {partner.name}</h2>
           <p className="muted">
-            {partnerHere ? `${partner.name} has the app open. The countdown starts the moment ${partner.name} joins.` : `${partner.name} isn't in the app right now, and will see this game on opening it.`}
+            {game.mode === 'challenge'
+              ? `The countdown starts the moment ${partner.name} taps Ready.`
+              : partnerHere ? `${partner.name} has the app open. The countdown starts the moment ${partner.name} joins.` : `${partner.name} isn't in the app right now, and will see this game on opening it.`}
           </p>
           <div className="stack">
             <button className="btn soft" onClick={nudge}><Icon name="share" size={18} /> Send {partner.name} a nudge</button>
@@ -371,7 +506,7 @@ export function GameScreen({ id }: { id?: string }) {
       <header className="topbar">
         <button className="iconbtn" onClick={() => back('/')} aria-label="Back"><Icon name="back" /></button>
         <h1 className="topbar-title">
-          <span className="live-pill"><i className="dot" /> Live</span> Game #{game.number}
+          <span className="live-pill"><i className="dot" /> Live</span> {game.mode === 'challenge' ? 'Challenge ⚔️' : `Game #${game.number}`}
         </h1>
         <div className="topbar-right">
           {phase === 'playing' && (
@@ -386,7 +521,7 @@ export function GameScreen({ id }: { id?: string }) {
         <SideCard player={partner} view={game.partner} isMe={false} onBoard={partnerOnBoard} align="right" />
       </div>
       {game.partner.status === 'solved' && game.me.status !== 'solved' && game.me.status !== 'failed' && (
-        <p className="partner-news">🏆 Your partner has solved today's word.</p>
+        <p className="partner-news">{game.mode === 'challenge' ? `🏆 ${partner.name} has solved the word you picked.` : "🏆 Your partner has solved today's word."}</p>
       )}
 
       <Board guesses={guesses} current={typed} revealRow={revealRow} shake={shake} bounceRow={bounceRow}
@@ -399,7 +534,12 @@ export function GameScreen({ id }: { id?: string }) {
               <p className="eyebrow">{game.me.status === 'solved' ? `Solved in ${game.me.guess_count}` : game.me.gave_up ? 'You gave up' : 'Out of guesses'}</p>
               <p className="finished-time">Your time <b><Elapsed startedAt={game.me.started_at} durationMs={game.me.duration_ms} /></b></p>
             </div>
-            {game.answer && <WordTiles word={game.answer} size={30} />}
+            {game.answer && (
+              <div className="finished-word">
+                <WordTiles word={game.answer} size={30} />
+                {game.mode === 'challenge' && <span className="muted small">picked by {partner.name}</span>}
+              </div>
+            )}
           </div>
           <p className="finished-wait">
             <span className="loader small" aria-hidden="true" />

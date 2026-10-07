@@ -12,7 +12,7 @@ import { useStore } from '../store';
 type Filter = 'all' | 'mine' | 'theirs' | 'unplayed' | 'played';
 
 export function WordsScreen() {
-  const { roomKey, slot, players, words, history, refreshWords, ping, reportError, toast } = useStore();
+  const { slot, players, words, history, refreshWords, ping, reportError, toast } = useStore();
   const [dict, setDict] = useState<Set<string> | null>(null);
   const [single, setSingle] = useState('');
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -37,16 +37,16 @@ export function WordsScreen() {
     return c;
   }, [preview]);
 
-  if (!slot || !roomKey) return null;
+  if (!slot) return null;
   const partnerSlot = (3 - slot) as Slot;
   const stats = repoStats(words ?? []);
   const setter = { 1: setterStats(history ?? [], words ?? [], 1), 2: setterStats(history ?? [], words ?? [], 2) };
 
   async function submit(list: string[], allowUnknown = false) {
-    if (!list.length || !roomKey || !slot) return;
+    if (!list.length || !slot) return;
     setBusy(true);
     try {
-      const r = await api.addWords(roomKey, slot, list, allowUnknown);
+      const r = await api.addWords(slot, list, allowUnknown);
       setReport(r);
       if (r.added.length) {
         ping('words');
@@ -90,7 +90,7 @@ export function WordsScreen() {
       return;
     }
     try {
-      await api.deleteWord(roomKey!, slot!, id);
+      await api.deleteWord(slot!, id);
       ping('words');
       await refreshWords();
     } catch (e) {

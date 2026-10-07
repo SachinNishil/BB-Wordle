@@ -1,9 +1,12 @@
 # Wordle for Two
 
-A private Wordle battle for Sachin and Menaka. You both add words to a shared
-repository. Whenever either of you presses **START GAME**, the app picks one secret
-word and you both play it at the same time on your own phones, watching each
-other's progress live (colours only, never letters).
+A private Wordle battle for Sachin and Menaka, played live on your own phones while
+you watch each other's progress (colours only, never letters). Two modes:
+
+- **Classic:** press **START GAME** and the app picks one secret word from your
+  shared repository. You both play the same word.
+- **Challenge:** you pick a word for your partner and your partner picks one for
+  you. Once both words are in, you each tap **I'm ready** and the countdown starts.
 
 Built with React + TypeScript + Supabase. Installs to the home screen as an app.
 
@@ -54,46 +57,36 @@ public channel access is allowed.)
 
 ### 4. Set up your phones
 
-**Sachin's phone**
+On each phone, open the Vercel link and choose who you are (Sachin or Menaka).
+That's it. To make it feel like an app, add it to the home screen:
 
-1. Open the Vercel link.
-   - **iPhone:** tap Share › **Add to Home Screen** first, then open the new icon.
-     (iPhone keeps home-screen apps separate from Safari, so do the setup inside the app.)
-   - **Android:** Chrome menu › **Install app**, then open it.
-2. Tap **Set up our room**, then **Share invite link** and send it to Menaka.
-3. Tap **Continue**, choose **Sachin**, and you're in.
-
-**Menaka's phone**
-
-1. Copy the invite link from the message.
-2. Open the Vercel link, add it to the Home Screen the same way, and open the icon.
-3. Tap **Paste invite link**, then choose **Menaka**.
-
-(Opening the link straight in the browser also works. The app will show a
-"Copy room link" card to carry the room into the installed app.)
+- **iPhone:** Safari's Share button › **Add to Home Screen**, then open the new icon
+  and choose who you are once more (the home-screen app keeps its own settings).
+- **Android:** Chrome menu › **Install app**.
 
 ### 5. Play
 
-Add words (aim for about 100 each to start: paste a whole list at once in
-**Word repository › Paste a list of words**), then press **START GAME**.
+For Classic, add words first (aim for about 100 each to start: paste a whole list
+at once in **Word repository › Paste a list of words**), then press **START GAME**.
+Challenge mode needs no repository words: tap **Challenge** and pick a word.
 
 ---
 
 ## How it works
 
-**The two of you.** There is no sign-in. Each phone picks who it belongs to in
-**Settings** (a simple Sachin / Menaka choice), and you can add photos there too.
-The room itself is protected by a long random key that only lives on your two
-phones, sent via the invite link. Without it, someone who finds the website
-sees only a "join your room" screen and can't read or change anything.
+**The two of you.** There is no sign-in and no room to join. Each phone picks who
+it belongs to (a simple Sachin / Menaka choice, changeable in **Settings**, where
+you can also add photos). The trade-off: anyone who has your app's link could
+open it too, so keep the link between the two of you. The pages are hidden from
+search engines.
 
 **The secret word stays secret.** The browser never receives the answer before
 you finish:
 
 - Every table has Row Level Security on with no policies, and the browser role
-  has no table access at all. Everything goes through Postgres functions that
-  check the room key first.
-- The answer sits in a locked `game_secrets` table. Your guess is checked inside
+  has no table access at all. Everything goes through Postgres functions.
+- The answer sits in a locked table (`game_secrets` for Classic,
+  `challenge_words` for Challenge, where each of you has your own answer). Your guess is checked inside
   the database, and your phone only gets back the colours for that guess.
 - You see the word the moment *your* round ends (solved, failed or given up).
   Your partner keeps playing without it. It's copied into the game record only
@@ -104,19 +97,28 @@ you finish:
 Because there's no sign-in, the two of you are trusted not to impersonate each
 other with developer tools. That was the trade for not having to log in.
 
+In Challenge mode you can see the word you picked (you typed it), never the one
+picked for you, until your own round ends.
+
 **Live sync.** Supabase Realtime carries tiny "something changed" pings and
 "who's online" presence between the phones; each phone then re-reads its own
 view through the secure functions. If realtime drops (bad signal), the app
 quietly polls every few seconds and catches up the moment it reconnects.
 
-**Game flow.** START GAME → *Waiting for player* → when both phones are on the
+**Game flow (Classic).** START GAME → *Waiting for player* → when both phones are on the
 game screen, a shared **3, 2, 1, GO!** → play. Each of you has your own clock.
 If your partner isn't around, **Play now** starts you anyway and they get their own
 countdown when they arrive. You can **Cancel** a game nobody has guessed in yet,
 or **Give up** your own round (flag icon). A new game can only start once the
 current one is complete.
 
-States: `waiting` → `ready` (countdown) → `live` → `player_one_complete` /
+**Game flow (Challenge).** Challenge → each of you picks a word for the other
+(you can change yours until both are in) → *Both words are in* → each taps
+**I'm ready** → shared countdown → play. You can call off a challenge until
+someone guesses. Challenge words must be real words (or in your repository),
+and one that's in your repository counts as played afterwards.
+
+States: `setting` (challenge only: picking words) → `waiting` → `ready` (countdown) → `live` → `player_one_complete` /
 `player_two_complete` → `completed`.
 
 **Winner.** Fewer guesses wins, whatever the time. Time only counts when you both
@@ -135,14 +137,18 @@ with an **Add anyway** button. Anything in your repository is always accepted as
 a guess, so a custom word can never make a game unwinnable.
 
 **Stats.** Win rate (battles won), solve rate, average guesses and time, streaks,
-fastest solve, most common score, guess distribution, head-to-head, a
-"Hall of fame" (Most Brutal Word, Easy Money, Clutch Player, Speed Demon,
-Comeback King, Word Setter, Hardest Word Setter, Nemesis Letter) and a
+fastest solve, most common score, guess distribution, head-to-head (with your
+record in each mode), a "Hall of fame" (Most Brutal Word, Easy Money, Clutch
+Player, Speed Demon, Comeback King, Word Setter, Hardest Word Setter, Toughest
+Challenger, Nemesis Letter) and a
 "who picks harder words" rivalry in the repository. A failed round counts as
 7 guesses in difficulty averages.
 
 - *Comeback King*: wins where the other person finished first on the clock.
 - *Nemesis Letter*: the letter you most often guess that isn't in the word.
+- *Toughest Challenger*: whose Challenge words took the other person more guesses.
+- Word difficulty, Most Brutal Word and the "who picks harder words" rivalry use
+  Classic games only, since in a Challenge you each solve a different word.
 
 ---
 
@@ -159,9 +165,7 @@ Comeback King, Word Setter, Hardest Word Setter, Nemesis Letter) and a
   since every deploy gets its own build id; you just won't get the "what's new" note.)
 - **Updating the database:** re-run `schema.sql`. It's safe to re-run and keeps
   all games and words.
-- **Lost the invite link / new phone:** on a phone that still works, Settings ›
-  Invite. If neither phone has it, run `select public.admin_new_room_key();`
-  in the SQL Editor and open `https://YOUR-APP/#room=<the key>` on both phones.
+- **New phone:** just open the link and choose who you are.
 - **Backups:** everything is in Supabase (Table Editor or Database › Backups).
 - **Free tier note:** Supabase pauses free projects after a week with no
   activity. Playing regularly keeps it awake; if it does pause, click
@@ -178,9 +182,10 @@ PGURL=postgres://... npm run test:sql   # attacks the schema in a real Postgres
 ```
 
 `npm run test:sql` creates a throwaway database, loads the schema the way Supabase
-would, and checks 105 things: that the browser role can't read any table or call
+would, and checks 134 things: that the browser role can't read any table or call
 internal functions, that the answer never appears in any response before you've
-finished, simultaneous starts and finishes, stale second-device guesses, give up,
+finished, Challenge mode (each player only ever sees the word they picked),
+simultaneous starts and finishes, stale second-device guesses, give up,
 cancel, word selection, and that the SQL and TypeScript scoring agree on 6,000
 word pairs.
 

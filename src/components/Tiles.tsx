@@ -31,3 +31,18 @@ export function MiniGrid({ patterns, rows = 6, cell = 9, gap = 2, showEmpty = tr
     </span>
   );
 }
+
+/** The word(s) of a finished game: one word for classic, both for a challenge. */
+export function GameWords({ game, size = 22 }: { game: { mode?: string; word: string | null; word_for_1: string; word_for_2: string }; size?: number }) {
+  if (game.mode !== 'challenge') return <WordTiles word={game.word ?? game.word_for_1} size={size} />;
+  const small = Math.round(size * 0.78);
+  return (
+    <span className="game-words" aria-label={`Challenge: ${game.word_for_1} and ${game.word_for_2}`}>
+      <span className="mode-badge" aria-hidden="true">⚔️</span>
+      <span className="game-words-stack">
+        <WordTiles word={game.word_for_1} size={small} />
+        <WordTiles word={game.word_for_2} size={small} />
+      </span>
+    </span>
+  );
+}

@@ -1,5 +1,5 @@
 // Every statistic in the app, computed from completed games. Pure functions.
-import type { HistoryGame, HistoryPlayer, Slot, WordRow } from './types';
+import type { GameMode, HistoryGame, HistoryPlayer, Slot, WordRow } from './types';
 
 /** A failed round counts as 7 guesses for difficulty averages. */
 export const FAIL_SCORE = 7;
@@ -65,12 +65,22 @@ export function playerStats(games: HistoryGame[], slot: Slot): PlayerStats {
   };
 }
 
+export interface ModeRecord {
+  games: number;
+  wins: Record<Slot, number>;
+  draws: number;
+}
+
 export interface HeadToHead {
   wins: Record<Slot, number>;
   draws: number;
   bothFailed: number;
   winStreak: { slot: Slot | null; length: number }; // current run of wins by one player
+  byMode: Record<GameMode, ModeRecord>;
 }
+
+/** Classic games only: the ones with one shared word from the repository. */
+export const classicGames = (games: HistoryGame[]) => games.filter((g) => (g.mode ?? 'classic') === 'classic' && !!g.word);
 
 export function headToHead(games: HistoryGame[]): HeadToHead {
   const wins: Record<Slot, number> = { 1: 0, 2: 0 };
@@ -90,7 +100,16 @@ export function headToHead(games: HistoryGame[]): HeadToHead {
     if (g.winner !== streakSlot) break;
     length++;
   }
-  return { wins, draws, bothFailed, winStreak: { slot: streakSlot, length } };
+  const byMode = {} as Record<GameMode, ModeRecord>;
+  for (const mode of ['classic', 'challenge'] as GameMode[]) {
+    const gs = games.filter((g) => (g.mode ?? 'classic') === mode);
+    byMode[mode] = {
+      games: gs.length,
+      wins: { 1: gs.filter((g) => g.winner === 1).length, 2: gs.filter((g) => g.winner === 2).length },
+      draws: gs.filter((g) => !g.winner).length,
+    };
+  }
+  return { wins, draws, bothFailed, winStreak: { slot: streakSlot, length }, byMode };
 }
 
 // ---------------------------------------------------------------- difficulty
@@ -110,11 +129,11 @@ export interface WordDifficulty {
 
 export function wordDifficulties(games: HistoryGame[]): WordDifficulty[] {
   const map = new Map<string, { addedBy: Slot; total: number; plays: number }>();
-  for (const g of games) {
-    const e = map.get(g.word) ?? { addedBy: g.word_added_by, total: 0, plays: 0 };
+  for (const g of classicGames(games)) {
+    const e = map.get(g.word!) ?? { addedBy: g.word_added_by as Slot, total: 0, plays: 0 };
     e.total += gameDifficulty(g);
     e.plays++;
-    map.set(g.word, e);
+    map.set(g.word!, e);
   }
   return [...map.entries()].map(([word, e]) => ({ word, addedBy: e.addedBy, plays: e.plays, avgAttempts: e.total / e.plays }));
 }
@@ -131,7 +150,7 @@ export interface SetterStats {
 }
 
 export function setterStats(games: HistoryGame[], words: WordRow[], slot: Slot): SetterStats {
-  const mine = games.filter((g) => g.word_added_by === slot);
+  const mine = classicGames(games).filter((g) => g.word_added_by === slot);
   const partnerScores = mine
     .map((g) => player(g, (3 - slot) as Slot))
     .filter((p): p is HistoryPlayer => !!p)
@@ -256,6 +275,21 @@ export function awards(games: HistoryGame[], words: WordRow[], names: Record<Slo
     const h = leader(hard, true);
     out.push({ id: 'hardest', emoji: '🧠', title: 'Hardest Word Setter', holder: h, value: h ? names[h] : 'Tied',
       detail: `Average guesses on their words · ${names[1]} ${hard[1].toFixed(1)}, ${names[2]} ${hard[2].toFixed(1)}` });
+  }
+  // Challenge mode: whose picked words gave the other person the hardest time.
+  const challenges = games.filter((g) => g.mode === 'challenge');
+  if (challenges.length) {
+    const toughness = { 1: null, 2: null } as Record<Slot, number | null>;
+    for (const setter of [1, 2] as Slot[]) {
+      const scores = challenges
+        .map((g) => player(g, (3 - setter) as Slot))
+        .filter((p): p is HistoryPlayer => !!p)
+        .map((p) => (p.status === 'solved' ? p.guess_count : FAIL_SCORE));
+      toughness[setter] = avg(scores);
+    }
+    const t = leader(toughness, true);
+    out.push({ id: 'challenger', emoji: '⚔️', title: 'Toughest Challenger', holder: t, value: t ? names[t] : 'Tied',
+      detail: `Guesses the other needed on their challenge words · ${names[1]} ${toughness[1]?.toFixed(1) ?? '–'}, ${names[2]} ${toughness[2]?.toFixed(1) ?? '–'}` });
   }
   for (const slot of [1, 2] as Slot[]) {
     const n = nemesisLetter(games, slot);

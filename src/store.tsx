@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api, ApiError, friendlyError } from './lib/api';
-import { deviceId, getRoomKey, getSlot, readRoomKeyFromUrl, setRoomKey, setSlot as saveSlot } from './lib/identity';
+import { deviceId, getSlot, setSlot as saveSlot, stripLegacyInvite } from './lib/identity';
 import { RoomChannel, type ChangeKind, type PresenceInfo, type Screen } from './lib/realtime';
 import type { GameView, HistoryGame, Player, Slot, WordRow } from './lib/types';
 import { load, save } from './lib/storage';
@@ -15,7 +15,6 @@ export interface Toast {
 }
 
 interface Store {
-  roomKey: string | null;
   slot: Slot | null;
   players: Record<Slot, Player>;
   me: Player | null;
@@ -30,10 +29,7 @@ interface Store {
   realtime: boolean;
   partnerPresence: PresenceInfo[];
   toasts: Toast[];
-  fatal: string | null;
 
-  joinRoom: (key: string) => void;
-  forgetRoom: () => void;
   chooseSlot: (s: Slot) => void;
   setPlayers: (p: Player[]) => void;
   refreshWords: () => Promise<void>;
@@ -66,11 +62,7 @@ function screenFor(path: string): Screen {
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const route = useRoute();
-  const [roomKey, setKeyState] = useState<string | null>(() => {
-    const fromUrl = readRoomKeyFromUrl();
-    if (fromUrl) setRoomKey(fromUrl);
-    return fromUrl ?? getRoomKey();
-  });
+  useState(() => stripLegacyInvite());
   const [slot, setSlotState] = useState<Slot | null>(() => getSlot());
   const [players, setPlayersState] = useState<Record<Slot, Player>>(DEFAULT_PLAYERS);
   const [words, setWords] = useState<WordRow[] | null>(null);
@@ -82,7 +74,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [realtime, setRealtime] = useState(false);
   const [presence, setPresence] = useState<PresenceInfo[]>([]);
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [fatal, setFatal] = useState<string | null>(null);
   const channel = useRef<RoomChannel | null>(null);
   const toastId = useRef(0);
   const prevActive = useRef<GameView | null>(null);
@@ -94,16 +85,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
   const dismissToast = useCallback((id: number) => setToasts((t) => t.filter((x) => x.id !== id)), []);
 
-  const reportError = useCallback(
-    (e: unknown) => {
-      if (e instanceof ApiError && e.code === 'bad_room_key') {
-        setFatal('bad_room_key');
-        return;
-      }
-      toast(friendlyError(e), 'error');
-    },
-    [toast],
-  );
+  const reportError = useCallback((e: unknown) => toast(friendlyError(e), 'error'), [toast]);
 
   const setPlayers = useCallback((list: Player[]) => {
     const next = { ...DEFAULT_PLAYERS };
@@ -112,33 +94,29 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refreshRoom = useCallback(async () => {
-    if (!roomKey) return;
     try {
-      const r = await api.getRoom(roomKey);
+      const r = await api.getRoom();
       setPlayers(r.players);
-      setFatal(null);
-    } catch (e) {
-      if (e instanceof ApiError && e.code === 'bad_room_key') setFatal('bad_room_key');
+    } catch {
+      /* offline: keep what we have */
     }
-  }, [roomKey, setPlayers]);
+  }, [setPlayers]);
 
   const refreshWords = useCallback(async () => {
-    if (!roomKey) return;
     try {
-      setWords(await api.listWords(roomKey));
+      setWords(await api.listWords());
     } catch (e) {
       reportError(e);
     }
-  }, [roomKey, reportError]);
+  }, [reportError]);
 
   const refreshHistory = useCallback(async () => {
-    if (!roomKey) return;
     try {
-      setHistory(await api.getHistory(roomKey));
+      setHistory(await api.getHistory());
     } catch (e) {
       reportError(e);
     }
-  }, [roomKey, reportError]);
+  }, [reportError]);
 
   const setActive = useCallback((g: GameView | null) => {
     setActiveState(g && g.status !== 'completed' ? g : null);
@@ -146,16 +124,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refreshActive = useCallback(async () => {
-    if (!roomKey || !slot) return;
+    if (!slot) return;
     try {
-      const s = await api.getGameState(roomKey, slot);
+      const s = await api.getGameState(slot);
       setActive(s.game);
       setOnline(true);
     } catch (e) {
       if (e instanceof ApiError && e.network) setOnline(false);
-      else if (e instanceof ApiError && e.code === 'bad_room_key') setFatal('bad_room_key');
     }
-  }, [roomKey, slot, setActive]);
+  }, [slot, setActive]);
 
   // When the active game disappears it has completed: history changed.
   useEffect(() => {
@@ -180,11 +157,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   // Initial load.
   useEffect(() => {
-    if (!roomKey) return;
     void refreshRoom();
     void refreshWords();
     void refreshHistory();
-  }, [roomKey, refreshRoom, refreshWords, refreshHistory]);
+  }, [refreshRoom, refreshWords, refreshHistory]);
   useEffect(() => {
     void refreshActive();
   }, [refreshActive]);
@@ -193,19 +169,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const namesRef = useRef(players);
   namesRef.current = players;
   useEffect(() => {
-    if (!roomKey || !slot) return;
+    if (!slot) return;
     const ch = new RoomChannel(
-      roomKey,
       { slot, screen: screenFor(location.hash.slice(1) || '/'), device: deviceId(), at: Date.now() },
       {
         onPing: (p) => {
           if (p.kind === 'game') {
             setPulse((x) => x + 1);
             void refreshActive();
-            if (p.what === 'started' && p.slot && p.slot !== slot) {
+            if ((p.what === 'started' || p.what === 'challenged') && p.slot && p.slot !== slot) {
               navigator.vibrate?.([30, 60, 30]);
-              toast(`${namesRef.current[p.slot].name} started a game!`, 'info', {
-                label: 'Join',
+              const from = namesRef.current[p.slot].name;
+              toast(p.what === 'challenged' ? `⚔️ ${from} challenged you!` : `${from} started a game!`, 'info', {
+                label: p.what === 'challenged' ? 'Pick a word' : 'Join',
                 run: () => go('/game'),
               });
             }
@@ -232,7 +208,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       channel.current = null;
       setRealtime(false);
     };
-  }, [roomKey, slot, refreshActive, refreshWords, refreshRoom, refreshHistory, toast]);
+  }, [slot, refreshActive, refreshWords, refreshRoom, refreshHistory, toast]);
 
   // Tell the partner which screen we're on.
   const screen = screenFor(route.path);
@@ -242,7 +218,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   // Polling safety net: fast when realtime is down, slow when it's up.
   useEffect(() => {
-    if (!roomKey || !slot) return;
+    if (!slot) return;
     const ms = realtime ? (screen === 'game' ? 15000 : 30000) : screen === 'game' ? 2500 : 8000;
     const t = setInterval(() => {
       if (document.visibilityState !== 'visible') return;
@@ -250,7 +226,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       void refreshActive();
     }, ms);
     return () => clearInterval(t);
-  }, [roomKey, slot, realtime, screen, refreshActive]);
+  }, [slot, realtime, screen, refreshActive]);
 
   // Coming back to the app or back online: refresh everything.
   useEffect(() => {
@@ -275,21 +251,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
   }, [refreshActive, refreshRoom]);
 
-  const joinRoom = useCallback((key: string) => {
-    setRoomKey(key);
-    setKeyState(key);
-    setFatal(null);
-  }, []);
-  const forgetRoom = useCallback(() => {
-    setRoomKey(null);
-    saveSlot(null);
-    setKeyState(null);
-    setSlotState(null);
-    setWords(null);
-    setHistory(null);
-    setActiveState(null);
-    setFatal(null);
-  }, []);
   const chooseSlot = useCallback((s: Slot) => {
     saveSlot(s);
     setSlotState(s);
@@ -298,7 +259,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<Store>(
     () => ({
-      roomKey,
       slot,
       players,
       me: slot ? players[slot] : null,
@@ -312,9 +272,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       realtime,
       partnerPresence: presence.filter((p) => p.slot !== slot),
       toasts,
-      fatal,
-      joinRoom,
-      forgetRoom,
       chooseSlot,
       setPlayers,
       refreshWords,
@@ -326,8 +283,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       dismissToast,
       reportError,
     }),
-    [roomKey, slot, players, words, history, active, activeLoaded, pulse, online, realtime, presence, toasts, fatal,
-      joinRoom, forgetRoom, chooseSlot, setPlayers, refreshWords, refreshHistory, refreshActive, setActive, ping, toast, dismissToast, reportError],
+    [slot, players, words, history, active, activeLoaded, pulse, online, realtime, presence, toasts,
+      chooseSlot, setPlayers, refreshWords, refreshHistory, refreshActive, setActive, ping, toast, dismissToast, reportError],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

@@ -12,7 +12,7 @@ export interface Room {
   active_game_id: string | null;
 }
 
-export type GameStatus = 'waiting' | 'ready' | 'live' | 'player_one_complete' | 'player_two_complete' | 'completed';
+export type GameStatus = 'setting' | 'waiting' | 'ready' | 'live' | 'player_one_complete' | 'player_two_complete' | 'completed';
 export type PlayerStatus = 'waiting' | 'ready' | 'playing' | 'solved' | 'failed';
 export type GameResult = 'win' | 'draw' | 'both_failed';
 
@@ -40,9 +40,12 @@ export interface PartnerView extends PlayerViewBase {
   guesses: GuessRow[] | null;
 }
 
+export type GameMode = 'classic' | 'challenge';
+
 export interface GameView {
   id: string;
   number: number;
+  mode: GameMode;
   status: GameStatus;
   created_by: Slot;
   created_at: string;
@@ -50,9 +53,16 @@ export interface GameView {
   completed_at: string | null;
   winner: Slot | null;
   result: GameResult | null;
-  /** Null until this player has finished (or the game is over). */
+  /** The word this player is solving. Null until they have finished (or the game is over). */
   answer: string | null;
+  /** The word the partner is solving: at completion, or (challenge) the word I picked for them. */
+  partner_answer: string | null;
+  /** Who picked/added the word I solved. Null until I have finished. */
   word_added_by: Slot | null;
+  /** Challenge mode: the word I picked for my partner. */
+  my_challenge_word: string | null;
+  i_have_set: boolean;
+  partner_has_set: boolean;
   me: MeView;
   partner: PartnerView;
 }
@@ -86,8 +96,12 @@ export interface HistoryGame {
   created_by: Slot;
   starts_at: string | null;
   completed_at: string;
-  word: string;
-  word_added_by: Slot;
+  mode: GameMode;
+  /** Classic only. Use word_for_1 / word_for_2 for both modes. */
+  word: string | null;
+  word_added_by: Slot | null;
+  word_for_1: string;
+  word_for_2: string;
   winner: Slot | null;
   result: GameResult;
   players: HistoryPlayer[];

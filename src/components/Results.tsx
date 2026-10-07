@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { fmtDate, fmtDuration } from '../lib/clock';
-import type { GameResult, GameView, GuessRow, HistoryGame, Player, PlayerStatus, Slot } from '../lib/types';
+import type { GameMode, GameResult, GameView, GuessRow, HistoryGame, Player, PlayerStatus, Slot } from '../lib/types';
 import { patternToEmoji } from '../lib/wordle';
 import { useStore } from '../store';
 import { Avatar } from './Avatar';
@@ -18,7 +18,11 @@ export interface ResultSide {
 export interface ResultData {
   id: string;
   number: number;
+  mode: GameMode;
+  /** Classic: the shared word. Challenge: unused (see words). */
   word: string;
+  /** The word each player solved. Same word twice in classic. */
+  words: Record<Slot, string>;
   wordAddedBy: Slot | null;
   winner: Slot | null;
   result: GameResult | null;
@@ -29,8 +33,12 @@ export interface ResultData {
 export function fromGameView(g: GameView): ResultData {
   const mine: ResultSide = { ...g.me, patterns: g.me.guesses.map((x) => x.pattern), guesses: g.me.guesses };
   const theirs: ResultSide = { ...g.partner, guesses: g.partner.guesses };
+  const mineW = g.answer ?? '?????';
+  const theirW = g.partner_answer ?? mineW;
   return {
-    id: g.id, number: g.number, word: g.answer ?? '?????', wordAddedBy: g.word_added_by, winner: g.winner,
+    id: g.id, number: g.number, mode: g.mode ?? 'classic', word: mineW,
+    words: g.me.slot === 1 ? { 1: mineW, 2: theirW } : { 1: theirW, 2: mineW },
+    wordAddedBy: g.word_added_by, winner: g.winner,
     result: g.result, date: g.completed_at ?? g.created_at,
     sides: g.me.slot === 1 ? { 1: mine, 2: theirs } : { 1: theirs, 2: mine },
   };
@@ -41,7 +49,10 @@ export function fromHistory(h: HistoryGame): ResultData {
     const p = h.players.find((x) => x.slot === slot)!;
     return { ...p, patterns: p.guesses.map((x) => x.pattern) };
   };
-  return { id: h.id, number: h.number, word: h.word, wordAddedBy: h.word_added_by, winner: h.winner, result: h.result,
+  const w1 = h.word_for_1 ?? h.word ?? '?????';
+  const w2 = h.word_for_2 ?? h.word ?? '?????';
+  return { id: h.id, number: h.number, mode: h.mode ?? 'classic', word: h.word ?? w1, words: { 1: w1, 2: w2 },
+    wordAddedBy: h.word_added_by, winner: h.winner, result: h.result,
     date: h.completed_at, sides: { 1: side(1), 2: side(2) } };
 }
 
@@ -57,7 +68,8 @@ export function shareText(d: ResultData, players: Record<Slot, Player>) {
   };
   const board = (slot: Slot) => `${players[slot].name}\n${d.sides[slot].patterns.map((p) => patternToEmoji(p)).join('\n')}`;
   const head = d.result === 'draw' ? 'Draw!' : d.result === 'both_failed' ? 'The word won 😅' : '';
-  return [`Wordle for two #${d.number}`, head, line(1), line(2), '', board(1), '', board(2)].filter((x, i) => x || i > 1).join('\n');
+  const title = d.mode === 'challenge' ? `Wordle for two #${d.number} · Challenge ⚔️` : `Wordle for two #${d.number}`;
+  return [title, head, line(1), line(2), '', board(1), '', board(2)].filter((x, i) => x || i > 1).join('\n');
 }
 
 export function ResultsView({ data, title, isToday }: { data: ResultData; title?: string; isToday?: boolean }) {
@@ -93,11 +105,27 @@ export function ResultsView({ data, title, isToday }: { data: ResultData; title?
 
   return (
     <div className="results">
-      <p className="eyebrow">{title ?? (isToday ? "Today's word" : `Game #${data.number} · ${fmtDate(data.date, { weekday: 'long', day: 'numeric', month: 'long' })}`)}</p>
-      <div className="results-word">
-        <WordTiles word={data.word} size={46} animate />
-      </div>
-      {data.wordAddedBy && <p className="added-by">Word added by {players[data.wordAddedBy].name}</p>}
+      <p className="eyebrow">{title ?? (data.mode === 'challenge'
+        ? `Challenge ⚔️ · ${isToday ? "today's words" : `game #${data.number} · ${fmtDate(data.date, { day: 'numeric', month: 'long' })}`}`
+        : isToday ? "Today's word" : `Game #${data.number} · ${fmtDate(data.date, { weekday: 'long', day: 'numeric', month: 'long' })}`)}</p>
+      {data.mode === 'challenge' ? (
+        <div className="challenge-words">
+          {slots.map((s) => (
+            <div key={s} className="challenge-word">
+              <p className="challenge-word-label"><Avatar player={players[s]} size={20} /> {players[s].name}'s word</p>
+              <WordTiles word={data.words[s]} size={38} animate />
+              <p className="added-by">picked by {players[(3 - s) as Slot].name}</p>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <>
+          <div className="results-word">
+            <WordTiles word={data.word} size={46} animate />
+          </div>
+          {data.wordAddedBy && <p className="added-by">Word added by {players[data.wordAddedBy].name}</p>}
+        </>
+      )}
 
       <div className={`winner-card ${data.result ?? ''}`}>
         {winner ? (

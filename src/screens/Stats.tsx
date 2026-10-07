@@ -99,6 +99,17 @@ export function StatsScreen() {
           {h.bothFailed ? ` · the word won ${h.bothFailed}` : ''}
           {h.winStreak.slot && h.winStreak.length > 1 ? ` · ${names[h.winStreak.slot]} has won ${h.winStreak.length} in a row 🔥` : ''}
         </p>
+        <div className="mode-split">
+          {(['classic', 'challenge'] as const).map((m) => (
+            <div key={m} className="mode-split-item">
+              <span className="mode-split-label">{m === 'classic' ? 'Classic' : 'Challenge ⚔️'}</span>
+              <span className="mode-split-score">
+                {names[1]} <b>{h.byMode[m].wins[1]}</b> · <b>{h.byMode[m].wins[2]}</b> {names[2]}
+              </span>
+              <span className="mode-split-games">{h.byMode[m].games} game{h.byMode[m].games === 1 ? '' : 's'}</span>
+            </div>
+          ))}
+        </div>
       </section>
 
       <section className="card">

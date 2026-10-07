@@ -4,7 +4,7 @@ import { useRoute } from './router';
 import { GameScreen } from './screens/Game';
 import { HistoryDetail, HistoryScreen } from './screens/History';
 import { Home } from './screens/Home';
-import { NotConfigured, Welcome, WhoAreYou } from './screens/Onboarding';
+import { NotConfigured, WhoAreYou } from './screens/Onboarding';
 import { SettingsScreen } from './screens/Settings';
 import { StatsScreen } from './screens/Stats';
 import { VersionsScreen } from './screens/Versions';
@@ -12,9 +12,8 @@ import { WordsScreen } from './screens/Words';
 import { StoreProvider, useStore } from './store';
 
 function Routes() {
-  const { roomKey, slot, fatal } = useStore();
+  const { slot } = useStore();
   const { parts } = useRoute();
-  if (!roomKey || fatal === 'bad_room_key') return <Welcome badKey={fatal === 'bad_room_key'} />;
   if (!slot) return <WhoAreYou />;
   switch (parts[0]) {
     case 'game':

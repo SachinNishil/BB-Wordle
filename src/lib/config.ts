@@ -2,7 +2,11 @@
 // Vercel (Project > Settings > Environment Variables) or in a local .env file.
 // Both values are safe to ship to the browser: the anon / publishable key can
 // only call the functions in supabase/schema.sql, and those need the room key.
-export const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim() ?? '';
+// Tolerates a pasted API URL like https://x.supabase.co/rest/v1/ (supabase-js adds that part itself).
+export const SUPABASE_URL = ((import.meta.env.VITE_SUPABASE_URL as string | undefined) ?? '')
+  .trim()
+  .replace(/\/+$/, '')
+  .replace(/\/rest\/v1$/, '');
 export const SUPABASE_ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)?.trim() ?? '';
 export const isConfigured = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
 

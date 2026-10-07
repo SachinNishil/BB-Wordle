@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { Icon } from '../components/Icon';
 import { fromHistory, ResultsView } from '../components/Results';
-import { WordTiles } from '../components/Tiles';
+import { GameWords } from '../components/Tiles';
 import { TopBar } from '../components/TopBar';
 import { fmtDate } from '../lib/clock';
 import { go } from '../router';
@@ -49,7 +49,7 @@ export function HistoryScreen() {
                         <small>{fmtDate(g.completed_at, { weekday: 'short' })}</small>
                       </span>
                       <span className="history-main">
-                        <WordTiles word={g.word} size={24} />
+                        <GameWords game={g} size={24} />
                         <span className="history-lines">
                           <span className="history-top">{line.top}</span>
                           {line.bottom && <span className="history-bottom">{line.bottom}</span>}

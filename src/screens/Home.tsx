@@ -3,11 +3,11 @@ import { Avatar } from '../components/Avatar';
 import { Icon } from '../components/Icon';
 import { InstallHint } from '../components/InstallHint';
 import { Elapsed } from '../components/Live';
-import { WordTiles } from '../components/Tiles';
+import { GameWords } from '../components/Tiles';
 import { api } from '../lib/api';
 import { APP_VERSION } from '../lib/versions';
 import { fmtDate, fmtDuration } from '../lib/clock';
-import type { GameView, HistoryGame, Player, Slot } from '../lib/types';
+import type { GameMode, GameView, HistoryGame, Player, Slot } from '../lib/types';
 import { go } from '../router';
 import { useStore } from '../store';
 
@@ -31,25 +31,25 @@ export function historyLine(g: HistoryGame, players: Record<Slot, Player>) {
 }
 
 function GameCard() {
-  const { roomKey, slot, players, active, activeLoaded, words, setActive, ping, reportError, partnerPresence } = useStore();
-  const [starting, setStarting] = useState(false);
+  const { slot, players, active, activeLoaded, words, setActive, ping, reportError, partnerPresence } = useStore();
+  const [starting, setStarting] = useState<GameMode | null>(null);
   if (!slot) return null;
   const me = players[slot];
   const partner = players[(3 - slot) as Slot];
   const noWords = words !== null && words.length === 0;
 
-  async function start() {
-    if (!roomKey || !slot) return;
-    setStarting(true);
+  async function start(mode: GameMode) {
+    if (!slot) return;
+    setStarting(mode);
     try {
-      const s = await api.startGame(roomKey, slot);
+      const s = await api.startGame(slot, mode);
       setActive(s.game);
-      ping('game', s.already_active ? 'joined' : 'started');
+      ping('game', s.already_active ? 'joined' : mode === 'challenge' ? 'challenged' : 'started');
       go('/game');
     } catch (e) {
       reportError(e);
     } finally {
-      setStarting(false);
+      setStarting(null);
     }
   }
 
@@ -66,13 +66,22 @@ function GameCard() {
       <section className="card game-card idle">
         <p className="eyebrow">Today's game</p>
         <h2 className="game-card-title">Ready for a battle?</h2>
-        <p className="muted">One secret word from your shared repository. Same word, two phones, six guesses each.</p>
-        <button className="btn primary big" onClick={start} disabled={starting || noWords}>
-          {starting ? 'Picking a word…' : 'START GAME'}
-        </button>
-        {noWords && (
-          <button className="btn text" onClick={() => go('/words')}>Add some words to the repository first</button>
-        )}
+        <div className="mode-choice">
+          <button className="btn primary big" onClick={() => start('classic')} disabled={!!starting || noWords}>
+            {starting === 'classic' ? 'Picking a word…' : 'START GAME'}
+          </button>
+          <p className="mode-note">Classic: one random word from your repository, the same for both of you.</p>
+          {noWords && (
+            <button className="btn text small" onClick={() => go('/words')}>Add some words to the repository first</button>
+          )}
+        </div>
+        <div className="mode-or" aria-hidden="true"><span>or</span></div>
+        <div className="mode-choice">
+          <button className="btn ghost big challenge-btn" onClick={() => start('challenge')} disabled={!!starting}>
+            {starting === 'challenge' ? 'Starting…' : <>⚔️ CHALLENGE {partner.name.toUpperCase()}</>}
+          </button>
+          <p className="mode-note">You pick a word for {partner.name}, {partner.name} picks one for you.</p>
+        </div>
       </section>
     );
   }
@@ -82,18 +91,42 @@ function GameCard() {
 
 function ActiveCard({ game, me, partner, partnerHere }: { game: GameView; me: Player; partner: Player; partnerHere: boolean }) {
   const mineDone = game.me.status === 'solved' || game.me.status === 'failed';
-  const invitedMe = !game.me.joined_at && game.created_by !== me.slot;
+  const challenge = game.mode === 'challenge';
+  const invitedMe = !challenge && !game.me.joined_at && game.created_by !== me.slot;
+  let eyebrow = 'Game live';
   let title = 'Game live';
+  let note: string | null = null;
   let cta = 'CONTINUE';
-  if (invitedMe) {
+  if (challenge && game.status === 'setting') {
+    eyebrow = 'Challenge ⚔️';
+    if (!game.i_have_set) {
+      title = game.created_by === me.slot ? `Pick a word for ${partner.name}` : `${partner.name} challenged you!`;
+      note = `Choose the word ${partner.name} has to solve.${game.partner_has_set ? ` ${partner.name} has already picked yours.` : ''}`;
+      cta = 'PICK A WORD';
+    } else {
+      title = `Waiting for ${partner.name} to pick your word`;
+      cta = 'VIEW';
+    }
+  } else if (challenge && game.status === 'waiting') {
+    eyebrow = 'Challenge ⚔️';
+    title = game.me.joined_at ? `Waiting for ${partner.name} to get ready` : 'Both words are in!';
+    cta = game.me.joined_at ? 'VIEW' : "I'M READY";
+  } else if (invitedMe) {
+    eyebrow = 'Your turn to join';
     title = `${partner.name} started a game!`;
     cta = 'JOIN GAME';
   } else if (game.status === 'waiting') {
+    eyebrow = 'Waiting for player';
     title = `Waiting for ${partner.name}`;
-  } else if (mineDone) {
-    title = game.me.status === 'solved' ? `You solved it in ${game.me.guess_count}` : 'Your round is over';
-    cta = 'VIEW';
+    note = partnerHere ? `${partner.name} has the app open.` : `${partner.name} will see it on opening the app.`;
+  } else {
+    if (challenge) eyebrow = 'Challenge ⚔️ · live';
+    if (mineDone) {
+      title = game.me.status === 'solved' ? `You solved it in ${game.me.guess_count}` : 'Your round is over';
+      cta = 'VIEW';
+    }
   }
+  const showScores = game.status !== 'setting' && !(challenge && game.status === 'waiting');
   const side = (p: Player, v: GameView['me'] | GameView['partner'], label: string) => (
     <div className="mini-side">
       <Avatar player={p} size={34} />
@@ -104,20 +137,20 @@ function ActiveCard({ game, me, partner, partnerHere }: { game: GameView; me: Pl
     </div>
   );
   return (
-    <section className="card game-card live">
-      <p className="eyebrow live-eyebrow"><i className="dot" /> {invitedMe ? 'Your turn to join' : game.status === 'waiting' ? 'Waiting for player' : 'Game live'}</p>
+    <section className={`card game-card live${challenge ? ' challenge' : ''}`}>
+      <p className="eyebrow live-eyebrow"><i className="dot" /> {eyebrow}</p>
       <h2 className="game-card-title">{title}</h2>
       {game.me.started_at && (
         <p className="live-clock"><Elapsed startedAt={game.me.started_at} durationMs={game.me.duration_ms} /></p>
       )}
-      <div className="mini-vs">
-        {side(me, game.me, 'You')}
-        <span className="vs-chip small">VS</span>
-        {side(partner, game.partner, partner.name)}
-      </div>
-      {game.status === 'waiting' && !invitedMe && (
-        <p className="muted small">{partnerHere ? `${partner.name} has the app open.` : `${partner.name} will see it on opening the app.`}</p>
+      {showScores && (
+        <div className="mini-vs">
+          {side(me, game.me, 'You')}
+          <span className="vs-chip small">VS</span>
+          {side(partner, game.partner, partner.name)}
+        </div>
       )}
+      {note && <p className="muted small">{note}</p>}
       <button className="btn primary big" onClick={() => go('/game')}>{cta}</button>
     </section>
   );
@@ -176,7 +209,7 @@ export function Home() {
                   <button className="recent-row" onClick={() => go(`/history/${g.id}`)}>
                     <span className="recent-date">{fmtDate(g.completed_at, { day: 'numeric', month: 'short' })}</span>
                     <span className="recent-main">
-                      <WordTiles word={g.word} size={22} />
+                      <GameWords game={g} size={22} />
                       <span className="recent-line">{line.top}{line.bottom ? <span className="recent-sub"> · {line.bottom}</span> : null}</span>
                     </span>
                     <Icon name="chevron" size={18} />

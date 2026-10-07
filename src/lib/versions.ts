@@ -9,6 +9,16 @@ export interface Release {
 
 export const VERSIONS: Release[] = [
   {
+    version: '1.2.0',
+    date: '2026-10-07',
+    changes: [
+      'No more invite links or rooms. Open the app, pick who you are once, and START GAME is right there.',
+      'New Challenge mode: you pick a word for your partner and your partner picks one for you. When both words are in, you each tap Ready and the countdown starts.',
+      'The classic mode still picks a random word from your repository, the same word for both of you.',
+      'Results and history show both words for a challenge, with who picked each one. Stats show your record in each mode, plus a new Toughest Challenger award.',
+    ],
+  },
+  {
     version: '1.1.0',
     date: '2026-10-07',
     changes: [
