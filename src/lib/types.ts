@@ -4,12 +4,33 @@ export interface Player {
   slot: Slot;
   name: string;
   photo: string | null;
+  /** Speech bubble on the home screen (v1.6); null after a day or when cleared. */
+  status_text?: string | null;
+  status_at?: string | null;
+}
+
+/** Settings › Classic words (v1.6), shared by both phones. */
+export interface WordSettings {
+  ed: boolean;
+  plural: boolean;
+  uncommon: boolean;
+  changed_by?: Slot;
+  changed_at?: string;
+}
+
+export interface WordSettingsInfo {
+  settings: WordSettings;
+  in_play: number;
+  /** e.g. base_common, ed_uncommon, plural_common */
+  counts: Record<string, number>;
+  dictionary: number;
 }
 
 export interface Room {
   server_now: string;
   players: Player[];
   active_game_id: string | null;
+  word_settings?: WordSettings;
 }
 
 export type GameStatus = 'setting' | 'waiting' | 'ready' | 'live' | 'player_one_complete' | 'player_two_complete' | 'completed';

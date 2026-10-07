@@ -3,7 +3,8 @@ import { api, ApiError, friendlyError } from './lib/api';
 import { deviceId, getSlot, setSlot as saveSlot, stripLegacyInvite } from './lib/identity';
 import { RoomChannel, type ChangeKind, type PresenceInfo, type Screen, type TypingInfo } from './lib/realtime';
 import { feedTaunts } from './lib/tauntFeed';
-import type { GameView, HistoryGame, Player, Slot, Taunt } from './lib/types';
+import { serverNow } from './lib/clock';
+import type { GameView, HistoryGame, Player, Slot, Taunt, WordSettings } from './lib/types';
 import { load, save } from './lib/storage';
 import { APP_VERSION } from './lib/versions';
 import { go, useRoute } from './router';
@@ -28,6 +29,11 @@ interface Store {
   online: boolean;
   realtime: boolean;
   partnerPresence: PresenceInfo[];
+  /** Partner has the app open on screen right now (green dot, v1.6). */
+  partnerOnline: boolean;
+  /** Settings › Classic words, shared by both phones (v1.6). */
+  wordSettings: WordSettings | null;
+  setWordSettingsLocal: (w: WordSettings) => void;
   toasts: Toast[];
   /** What my partner is typing right now (spectator mode, v1.5). */
   partnerTyping: (TypingInfo & { at: number }) | null;
@@ -77,6 +83,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [online, setOnline] = useState(navigator.onLine);
   const [realtime, setRealtime] = useState(false);
   const [presence, setPresence] = useState<PresenceInfo[]>([]);
+  const [wordSettings, setWordSettings] = useState<WordSettings | null>(null);
+  const [tick, setTick] = useState(0);
+  const roomSeen = useRef<{ status: string | null | undefined; words: string | undefined } | null>(null);
+  const screenRef = useRef<string>('home');
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [partnerTyping, setPartnerTyping] = useState<Store['partnerTyping']>(null);
   // Bumped to rebuild the live channel after the app comes back from the background.
@@ -87,7 +97,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const toast = useCallback((text: string, tone: Toast['tone'] = 'info', action?: Toast['action']) => {
     const id = ++toastId.current;
-    setToasts((t) => [...t.slice(-2), { id, text, tone, action }]);
+    setToasts((t) => [...t.filter((x) => x.text !== text).slice(-2), { id, text, tone, action }]);
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), action ? 7000 : 2600);
   }, []);
   const dismissToast = useCallback((id: number) => setToasts((t) => t.filter((x) => x.id !== id)), []);
@@ -104,10 +114,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     try {
       const r = await api.getRoom();
       setPlayers(r.players);
+      if (r.word_settings) setWordSettings(r.word_settings);
+      // Partner news: a new speech bubble, or changed Classic words.
+      const other = slot ? r.players.find((p) => p.slot !== slot) : undefined;
+      const now = { status: other?.status_at ? `${other.status_at}|${other.status_text}` : null, words: r.word_settings?.changed_at };
+      const before = roomSeen.current;
+      roomSeen.current = now;
+      if (before && other) {
+        if (now.status && now.status !== before.status && other.status_text) {
+          navigator.vibrate?.(20);
+          if (screenRef.current !== 'home') toast(`💬 ${other.name}: ${other.status_text}`, 'info', { label: 'See', run: () => go('/') });
+        }
+        if (now.words && now.words !== before.words && r.word_settings?.changed_by === other.slot && screenRef.current !== 'settings') {
+          toast(`${other.name} changed the Classic words`, 'info', { label: 'See', run: () => go('/settings') });
+        }
+      }
     } catch {
       /* offline: keep what we have */
     }
-  }, [setPlayers]);
+  }, [setPlayers, slot, toast]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const refreshHistory = useCallback(async () => {
     try {
@@ -216,8 +241,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       },
     );
     channel.current = ch;
+    ch.setVisible(document.visibilityState === 'visible');
     void ch.open();
+    const beat = setInterval(() => ch.heartbeat(), 25000);
     return () => {
+      clearInterval(beat);
       ch.close();
       channel.current = null;
       setRealtime(false);
@@ -226,6 +254,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   // Tell the partner which screen we're on.
   const screen = screenFor(route.path);
+  screenRef.current = screen;
   useEffect(() => {
     channel.current?.setPresence({ screen });
   }, [screen, realtime]);
@@ -250,7 +279,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let hiddenAt = 0;
     const wake = () => {
-      if (document.visibilityState !== 'visible') {
+      const visible = document.visibilityState === 'visible';
+      channel.current?.setVisible(visible);
+      if (!visible) {
         hiddenAt = Date.now();
         return;
       }
@@ -286,6 +317,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
   }, [refreshActive, refreshRoom]);
 
+  // Re-check the online dot every 10 s (presence goes stale if a phone just vanishes).
+  useEffect(() => {
+    const t = setInterval(() => setTick((x) => x + 1), 10000);
+    return () => clearInterval(t);
+  }, []);
+  const partnerOnline = useMemo(
+    () => presence.some((p) => p.slot !== slot && serverNow() - (p.at ?? 0) < 70000),
+    [presence, slot, tick], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
   const chooseSlot = useCallback((s: Slot) => {
     saveSlot(s);
     setSlotState(s);
@@ -305,6 +346,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       online,
       realtime,
       partnerPresence: presence.filter((p) => p.slot !== slot),
+      partnerOnline,
+      wordSettings,
+      setWordSettingsLocal: setWordSettings,
       toasts,
       chooseSlot,
       setPlayers,
@@ -319,7 +363,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       dismissToast,
       reportError,
     }),
-    [slot, players, history, active, activeLoaded, pulse, online, realtime, presence, toasts,
+    [slot, players, history, active, activeLoaded, pulse, online, realtime, presence, toasts, partnerOnline, wordSettings,
       chooseSlot, setPlayers, refreshHistory, refreshActive, setActive, ping, pushTaunt, sendTyping, partnerTyping, toast, dismissToast, reportError],
   );
 

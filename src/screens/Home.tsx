@@ -6,8 +6,8 @@ import { Elapsed } from '../components/Live';
 import { GameWords } from '../components/Tiles';
 import { api } from '../lib/api';
 import { APP_VERSION } from '../lib/versions';
-import { fmtDate, fmtDuration } from '../lib/clock';
-import type { GameMode, GameView, HistoryGame, Player, Slot } from '../lib/types';
+import { fmtDate, fmtDuration, serverNow } from '../lib/clock';
+import type { GameMode, GameView, HistoryGame, Player, Slot, WordSettings } from '../lib/types';
 import { go } from '../router';
 import { useStore } from '../store';
 
@@ -30,8 +30,16 @@ export function historyLine(g: HistoryGame, players: Record<Slot, Player>) {
   return { top: `🏆 ${players[w].name} · ${score(w)}`, bottom: `${players[l].name} · ${score(l)}` };
 }
 
+/** "everyday word", "everyday word, plurals included", "word from the whole dictionary"... */
+function classicPool(w: WordSettings | null) {
+  if (!w) return 'everyday word';
+  if (w.ed && w.plural && w.uncommon) return 'word from the whole dictionary';
+  const extra = [w.plural && 'plurals', w.ed && '-ed words', w.uncommon && 'tricky ones'].filter(Boolean) as string[];
+  return extra.length ? `everyday word (${extra.join(' and ')} too)` : 'everyday word';
+}
+
 function GameCard() {
-  const { slot, players, active, activeLoaded, setActive, ping, reportError } = useStore();
+  const { slot, players, active, activeLoaded, setActive, ping, reportError, wordSettings } = useStore();
   const [starting, setStarting] = useState<GameMode | null>(null);
   if (!slot) return null;
   const me = players[slot];
@@ -69,7 +77,7 @@ function GameCard() {
           <button className="btn primary big" onClick={() => start('classic')} disabled={!!starting}>
             {starting === 'classic' ? 'Picking a word…' : 'START GAME'}
           </button>
-          <p className="mode-note">Classic: a random word from the dictionary, the same for both of you.</p>
+          <p className="mode-note">Classic: a random {classicPool(wordSettings)}, the same for both of you.</p>
         </div>
         <div className="mode-or" aria-hidden="true"><span>or</span></div>
         <div className="mode-choice">
@@ -152,6 +160,93 @@ function ActiveCard({ game, me, partner }: { game: GameView; me: Player; partner
   );
 }
 
+const STATUS_IDEAS = ['Rematch? 😏', 'Ready when you are', "You're going down 🔥", 'Miss you 😘', 'Free for a game?'];
+const STATUS_MAX = 80;
+
+function ago(iso: string) {
+  const m = Math.max(0, Math.round((serverNow() - Date.parse(iso)) / 60000));
+  if (m < 1) return 'just now';
+  if (m < 60) return `${m}m ago`;
+  return `${Math.round(m / 60)}h ago`;
+}
+
+/** The two of you at the top of Home (v1.6): green dot when your partner has the app open,
+ *  speech bubbles from your photos, and tap your own photo to say something. */
+function Couple({ me, partner }: { me: Player; partner: Player }) {
+  const { slot, partnerOnline, setPlayers, ping, reportError, toast } = useStore();
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function save(value: string) {
+    if (!slot) return;
+    setBusy(true);
+    try {
+      const r = await api.setStatus(slot, value.slice(0, STATUS_MAX));
+      setPlayers(r.players);
+      ping('room', 'status');
+      setOpen(false);
+      if (value.trim()) toast(`${partner.name} will see it on their home screen`, 'win');
+    } catch (e) {
+      reportError(e);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const side = (p: Player, mine: boolean) => (
+    <div className={`couple-side${mine ? ' mine' : ''}`}>
+      {p.status_text && (
+        <p className={`speech ${mine ? 'left' : 'right'}`} key={p.status_at ?? ''}>
+          <span className="speech-text">{p.status_text}</span>
+          {p.status_at && <span className="speech-time">{ago(p.status_at)}</span>}
+        </p>
+      )}
+      {mine ? (
+        <button className="avatar-btn couple-me" onClick={() => { setText(me.status_text ?? ''); setOpen(true); }}
+          aria-label="Say something to your partner">
+          <Avatar player={p} size={58} ring />
+          <span className="avatar-say" aria-hidden="true">💬</span>
+        </button>
+      ) : (
+        <span className="couple-them">
+          <Avatar player={p} size={58} ring />
+          {partnerOnline && <span className="online-dot" role="img" aria-label={`${p.name} is in the app`} title={`${p.name} is in the app`} />}
+        </span>
+      )}
+      <span>{p.name}</span>
+    </div>
+  );
+
+  return (
+    <>
+      <div className={`couple${me.status_text || partner.status_text ? ' talking' : ''}`}>
+        {side(me, true)}
+        <span className="couple-vs"><span aria-hidden="true">❤️</span> VS <span aria-hidden="true">❤️</span></span>
+        {side(partner, false)}
+      </div>
+      {open && (
+        <div className="modal-backdrop" onClick={() => setOpen(false)}>
+          <form className="modal" role="dialog" aria-modal="true" aria-label={`Say something to ${partner.name}`}
+            onClick={(e) => e.stopPropagation()} onSubmit={(e) => { e.preventDefault(); void save(text); }}>
+            <h3>Say something to {partner.name}</h3>
+            <p className="muted small">It shows as a speech bubble from your photo on {partner.name}'s home screen, for a day.</p>
+            <input className="text-input" value={text} maxLength={STATUS_MAX} autoFocus onChange={(e) => setText(e.target.value)}
+              placeholder="Rematch tonight? 😏" aria-label="Your message" enterKeyHint="send" />
+            <div className="trash-lines wrap">
+              {STATUS_IDEAS.map((i) => <button type="button" key={i} className="trash-line" onClick={() => setText(i)}>{i}</button>)}
+            </div>
+            <div className="modal-actions">
+              {me.status_text && <button type="button" className="btn ghost" onClick={() => save('')} disabled={busy}>Clear</button>}
+              <button type="submit" className="btn primary" disabled={busy || !text.trim()}>Post</button>
+            </div>
+          </form>
+        </div>
+      )}
+    </>
+  );
+}
+
 export function Home() {
   const { me, partner, players, history, online } = useStore();
   if (!me || !partner) return null;
@@ -177,11 +272,7 @@ export function Home() {
         <p className="logo-sub">for two</p>
       </div>
 
-      <div className="couple">
-        <div className="couple-side"><Avatar player={me} size={58} ring /><span>{me.name}</span></div>
-        <span className="couple-vs"><span aria-hidden="true">❤️</span> VS <span aria-hidden="true">❤️</span></span>
-        <div className="couple-side"><Avatar player={partner} size={58} ring /><span>{partner.name}</span></div>
-      </div>
+      <Couple me={me} partner={partner} />
 
       <GameCard />
 

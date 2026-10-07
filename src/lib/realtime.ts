@@ -16,6 +16,7 @@
 // If the channel can't connect (offline, Realtime disabled), the app falls
 // back to polling, so it degrades to "a few seconds late", never "stuck".
 import type { RealtimeChannel } from '@supabase/supabase-js';
+import { serverNow } from './clock';
 import { SUPABASE_URL } from './config';
 import { supabase } from './supabase';
 import type { Slot, Taunt } from './types';
@@ -94,14 +95,29 @@ export class RoomChannel {
       const ok = status === 'SUBSCRIBED';
       this.connected = ok;
       this.handlers.onStatus(ok);
-      if (ok) void ch.track(this.me);
+      if (ok && !this.hidden) void ch.track({ ...this.me, at: serverNow() });
     });
     this.channel = ch;
   }
 
+  private hidden = false;
+
   setPresence(update: Partial<PresenceInfo>) {
-    this.me = { ...this.me, ...update, at: Date.now() };
-    if (this.channel && this.connected) void this.channel.track(this.me);
+    this.me = { ...this.me, ...update, at: serverNow() };
+    if (this.channel && this.connected && !this.hidden) void this.channel.track(this.me);
+  }
+
+  /** Online dot (v1.6): only count as "in the app" while the app is on screen. */
+  setVisible(visible: boolean) {
+    this.hidden = !visible;
+    if (!this.channel || !this.connected) return;
+    if (visible) void this.channel.track({ ...this.me, at: serverNow() });
+    else void this.channel.untrack();
+  }
+
+  /** Refresh our presence timestamp so the other phone knows we're still here. */
+  heartbeat() {
+    if (!this.hidden) this.setPresence({});
   }
 
   ping(kind: ChangeKind, what?: string) {

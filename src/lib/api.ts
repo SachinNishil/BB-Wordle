@@ -1,6 +1,6 @@
 import { syncClock } from './clock';
 import { supabase } from './supabase';
-import type { GameMode, GameState, GuessResult, HistoryGame, Room, Slot } from './types';
+import type { GameMode, GameState, GuessResult, HistoryGame, Room, Slot, WordSettingsInfo } from './types';
 
 /** An error from the server, with a code from supabase/schema.sql (e.g. "not_a_word"). */
 export class ApiError extends Error {
@@ -35,6 +35,8 @@ const FRIENDLY: Record<string, string> = {
   not_your_turn_to_talk: 'Finish your own round first, then the trash talk can begin.',
   bad_taunt: 'Keep it to 60 characters.',
   too_fast: 'Easy, easy. Give it a second.',
+  dictionary_outdated: 'The word list needs updating. Run the new dictionary.sql in Supabase.',
+  bad_status: 'Keep it to 80 characters.',
 };
 
 export function friendlyError(e: unknown): string {
@@ -73,6 +75,11 @@ export const api = {
   getRoom: () => call<Room>('get_room', K),
   updatePlayer: (slot: Slot, name: string | null, photo: string | null, clearPhoto = false) =>
     call<Room>('update_player', { ...K, p_slot: slot, p_name: name, p_photo: photo, p_clear_photo: clearPhoto }),
+
+  getWordSettings: () => call<WordSettingsInfo>('get_word_settings', K),
+  setWordSettings: (slot: Slot, ed: boolean, plural: boolean, uncommon: boolean) =>
+    call<WordSettingsInfo>('set_word_settings', { ...K, p_slot: slot, p_ed: ed, p_plural: plural, p_uncommon: uncommon }),
+  setStatus: (slot: Slot, text: string) => call<Room>('set_status', { ...K, p_slot: slot, p_text: text }),
 
   getGameState: (slot: Slot, gameId: string | null = null) =>
     call<GameState>('get_game_state', { ...K, p_slot: slot, p_game_id: gameId }),

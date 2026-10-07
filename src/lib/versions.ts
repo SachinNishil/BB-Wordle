@@ -9,6 +9,15 @@ export interface Release {
 
 export const VERSIONS: Release[] = [
   {
+    version: '1.6.0',
+    date: '2026-10-07',
+    changes: [
+      'A green dot on your partner\'s photo on the home screen whenever they have the app open.',
+      'Say something: tap your own photo on the home screen and type a message. It shows as a speech bubble from your photo on your partner\'s home screen for a day.',
+      'Settings › Classic words: choose what Classic can pick on top of everyday words: words ending in -ed, plurals, and uncommon or tricky words. Tick all three for the whole dictionary. It\'s shared, so both phones always play with the same setting.',
+    ],
+  },
+  {
     version: '1.5.0',
     date: '2026-10-07',
     changes: [
