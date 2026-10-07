@@ -1,5 +1,5 @@
 // Every statistic in the app, computed from completed games. Pure functions.
-import type { GameMode, HistoryGame, HistoryPlayer, Slot, WordRow } from './types';
+import type { GameMode, HistoryGame, HistoryPlayer, Slot } from './types';
 
 /** A failed round counts as 7 guesses for difficulty averages. */
 export const FAIL_SCORE = 7;
@@ -138,49 +138,6 @@ export function wordDifficulties(games: HistoryGame[]): WordDifficulty[] {
   return [...map.entries()].map(([word, e]) => ({ word, addedBy: e.addedBy, plays: e.plays, avgAttempts: e.total / e.plays }));
 }
 
-export interface SetterStats {
-  slot: Slot;
-  contributed: number;
-  played: number;
-  /** Both players' average attempts on this person's words. */
-  avgAttempts: number | null;
-  /** Only the partner's attempts on this person's words (the setter may remember them). */
-  avgAttemptsForPartner: number | null;
-  partnerFails: number;
-}
-
-export function setterStats(games: HistoryGame[], words: WordRow[], slot: Slot): SetterStats {
-  const mine = classicGames(games).filter((g) => g.word_added_by === slot);
-  const partnerScores = mine
-    .map((g) => player(g, (3 - slot) as Slot))
-    .filter((p): p is HistoryPlayer => !!p)
-    .map((p) => (p.status === 'solved' ? p.guess_count : FAIL_SCORE));
-  return {
-    slot,
-    contributed: words.filter((w) => w.added_by === slot).length,
-    played: mine.length,
-    avgAttempts: avg(mine.map(gameDifficulty)),
-    avgAttemptsForPartner: avg(partnerScores),
-    partnerFails: partnerScores.filter((s) => s === FAIL_SCORE).length,
-  };
-}
-
-export interface RepoStats {
-  total: number;
-  bySlot: Record<Slot, number>;
-  played: number;
-  neverPlayed: number;
-}
-
-export function repoStats(words: WordRow[]): RepoStats {
-  return {
-    total: words.length,
-    bySlot: { 1: words.filter((w) => w.added_by === 1).length, 2: words.filter((w) => w.added_by === 2).length },
-    played: words.filter((w) => w.times_played > 0).length,
-    neverPlayed: words.filter((w) => w.times_played === 0).length,
-  };
-}
-
 // ---------------------------------------------------------------- fun awards
 
 export interface Award {
@@ -221,17 +178,17 @@ function leader(values: Record<Slot, number | null>, higherIsBetter: boolean): S
   return (higherIsBetter ? a > b : a < b) ? 1 : 2;
 }
 
-export function awards(games: HistoryGame[], words: WordRow[], names: Record<Slot, string>, fmtMs: (ms: number) => string): Award[] {
+export function awards(games: HistoryGame[], names: Record<Slot, string>, fmtMs: (ms: number) => string): Award[] {
   const out: Award[] = [];
   const diffs = wordDifficulties(games);
   if (diffs.length) {
     const brutal = [...diffs].sort((a, b) => b.avgAttempts - a.avgAttempts || a.word.localeCompare(b.word))[0];
     const easy = [...diffs].sort((a, b) => a.avgAttempts - b.avgAttempts || a.word.localeCompare(b.word))[0];
     out.push({ id: 'brutal', emoji: '💀', title: 'Most Brutal Word', holder: null, value: brutal.word,
-      detail: `${brutal.avgAttempts.toFixed(1)} guesses on average · set by ${names[brutal.addedBy]}` });
+      detail: `${brutal.avgAttempts.toFixed(1)} guesses on average` });
     if (diffs.length > 1) {
       out.push({ id: 'easy', emoji: '💸', title: 'Easy Money', holder: null, value: easy.word,
-        detail: `${easy.avgAttempts.toFixed(1)} guesses on average · set by ${names[easy.addedBy]}` });
+        detail: `${easy.avgAttempts.toFixed(1)} guesses on average` });
     }
   }
 
@@ -263,18 +220,6 @@ export function awards(games: HistoryGame[], words: WordRow[], names: Record<Slo
     const c = leader(comeback, true);
     out.push({ id: 'comeback', emoji: '👑', title: 'Comeback King', holder: c, value: c ? names[c] : 'Tied',
       detail: `Won even though the other finished first · ${names[1]} ${comeback[1]}, ${names[2]} ${comeback[2]}` });
-  }
-  const contributed = { 1: words.filter((w) => w.added_by === 1).length, 2: words.filter((w) => w.added_by === 2).length };
-  if (contributed[1] + contributed[2] > 0) {
-    const s = leader(contributed, true);
-    out.push({ id: 'setter', emoji: '📚', title: 'Word Setter', holder: s, value: s ? names[s] : 'Tied',
-      detail: `Most words added · ${names[1]} ${contributed[1]}, ${names[2]} ${contributed[2]}` });
-  }
-  const hard = { 1: setterStats(games, words, 1).avgAttempts, 2: setterStats(games, words, 2).avgAttempts };
-  if (hard[1] != null && hard[2] != null) {
-    const h = leader(hard, true);
-    out.push({ id: 'hardest', emoji: '🧠', title: 'Hardest Word Setter', holder: h, value: h ? names[h] : 'Tied',
-      detail: `Average guesses on their words · ${names[1]} ${hard[1].toFixed(1)}, ${names[2]} ${hard[2].toFixed(1)}` });
   }
   // Challenge mode: whose picked words gave the other person the hardest time.
   const challenges = games.filter((g) => g.mode === 'challenge');

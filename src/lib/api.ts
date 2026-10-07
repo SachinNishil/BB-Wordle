@@ -1,6 +1,6 @@
 import { syncClock } from './clock';
 import { supabase } from './supabase';
-import type { AddWordsResult, GameMode, GameState, GuessResult, HistoryGame, Room, Slot, WordRow } from './types';
+import type { GameMode, GameState, GuessResult, HistoryGame, Room, Slot } from './types';
 
 /** An error from the server, with a code from supabase/schema.sql (e.g. "not_a_word"). */
 export class ApiError extends Error {
@@ -17,7 +17,7 @@ export class ApiError extends Error {
 
 const FRIENDLY: Record<string, string> = {
   bad_player: 'Pick who you are in Settings first.',
-  no_words: 'Add some words to the repository first.',
+  no_words: 'The word list is missing. Run dictionary.sql in Supabase.',
   not_started: "The game hasn't started yet.",
   too_early: 'Hold on, the countdown is still running.',
   not_a_word: 'Not in word list',
@@ -27,13 +27,11 @@ const FRIENDLY: Record<string, string> = {
   game_over: 'This game is over.',
   game_not_found: 'That game no longer exists.',
   cannot_cancel: 'Someone has already guessed, so this game can only be finished.',
-  cannot_delete_word: 'You can only remove words you added.',
   words_locked: 'Both words are already in.',
   not_a_challenge: 'This game is not a challenge.',
   no_room: 'The database needs setting up. Run schema.sql in Supabase.',
   bad_photo: "That photo couldn't be used.",
   bad_name: 'Names need 1 to 24 characters.',
-  too_many_words: 'Paste up to 5,000 words at a time.',
 };
 
 export function friendlyError(e: unknown): string {
@@ -72,11 +70,6 @@ export const api = {
   getRoom: () => call<Room>('get_room', K),
   updatePlayer: (slot: Slot, name: string | null, photo: string | null, clearPhoto = false) =>
     call<Room>('update_player', { ...K, p_slot: slot, p_name: name, p_photo: photo, p_clear_photo: clearPhoto }),
-
-  listWords: () => call<WordRow[]>('list_words', K),
-  addWords: (slot: Slot, words: string[], allowUnknown = false) =>
-    call<AddWordsResult>('add_words', { ...K, p_slot: slot, p_words: words, p_allow_unknown: allowUnknown }),
-  deleteWord: (slot: Slot, id: number) => call<boolean>('delete_word', { ...K, p_slot: slot, p_word_id: id }),
 
   getGameState: (slot: Slot, gameId: string | null = null) =>
     call<GameState>('get_game_state', { ...K, p_slot: slot, p_game_id: gameId }),

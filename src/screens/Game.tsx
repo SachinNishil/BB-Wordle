@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Avatar } from '../components/Avatar';
 import { Board, REVEAL_MS } from '../components/Board';
 import { Countdown } from '../components/Countdown';
@@ -33,7 +33,7 @@ function phaseOf(g: GameView | null, loaded: boolean): Phase {
 
 export function GameScreen({ id }: { id?: string }) {
   const store = useStore();
-  const { slot, players, active, activeLoaded, pulse, words, ping, toast, reportError, setActive, partnerPresence } = store;
+  const { slot, players, active, activeLoaded, pulse, ping, toast, reportError, setActive, partnerPresence } = store;
   const [gameId, setGameId] = useState<string | null>(id ?? null);
   const [game, setGame] = useState<GameView | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -164,7 +164,6 @@ export function GameScreen({ id }: { id?: string }) {
     }
   }, [game, partner, toast]);
 
-  const allowed = useMemo(() => new Set((words ?? []).map((w) => w.word)), [words]);
   const revealing = revealRow !== null;
 
   const doShake = useCallback(
@@ -182,7 +181,7 @@ export function GameScreen({ id }: { id?: string }) {
     const word = typed;
     if (word.length < 5) return doShake('Not enough letters');
     const dict = await loadDictionary();
-    if (dict.size > 0 && !dict.has(word) && !allowed.has(word)) return doShake('Not in word list');
+    if (dict.size > 0 && !dict.has(word)) return doShake('Not in word list');
     setSubmitting(true);
     const row = game.me.guess_count;
     try {
@@ -216,7 +215,7 @@ export function GameScreen({ id }: { id?: string }) {
     } finally {
       setSubmitting(false);
     }
-  }, [game, slot, typed, allowed, apply, ping, toast, doShake, reportError, reload]);
+  }, [game, slot, typed, apply, ping, toast, doShake, reportError, reload]);
 
   const picking = phase === 'setting' && !!game && (!game.i_have_set || changing);
 
@@ -224,7 +223,7 @@ export function GameScreen({ id }: { id?: string }) {
     if (!game || !slot) return;
     if (pick.length < 5) return doShake('Not enough letters');
     const dict = await loadDictionary();
-    if (dict.size > 0 && !dict.has(pick) && !allowed.has(pick)) return doShake('Not in word list');
+    if (dict.size > 0 && !dict.has(pick)) return doShake('Not in word list');
     setSubmitting(true);
     try {
       const r = await api.setChallengeWord(slot, game.id, pick);
@@ -242,7 +241,7 @@ export function GameScreen({ id }: { id?: string }) {
     } finally {
       setSubmitting(false);
     }
-  }, [game, slot, pick, allowed, apply, ping, toast, doShake, reportError, reload, partner]);
+  }, [game, slot, pick, apply, ping, toast, doShake, reportError, reload, partner]);
 
   async function ready() {
     if (!game || !slot) return;

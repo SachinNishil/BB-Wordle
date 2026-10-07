@@ -31,12 +31,11 @@ export function historyLine(g: HistoryGame, players: Record<Slot, Player>) {
 }
 
 function GameCard() {
-  const { slot, players, active, activeLoaded, words, setActive, ping, reportError, partnerPresence } = useStore();
+  const { slot, players, active, activeLoaded, setActive, ping, reportError, partnerPresence } = useStore();
   const [starting, setStarting] = useState<GameMode | null>(null);
   if (!slot) return null;
   const me = players[slot];
   const partner = players[(3 - slot) as Slot];
-  const noWords = words !== null && words.length === 0;
 
   async function start(mode: GameMode) {
     if (!slot) return;
@@ -67,13 +66,10 @@ function GameCard() {
         <p className="eyebrow">Today's game</p>
         <h2 className="game-card-title">Ready for a battle?</h2>
         <div className="mode-choice">
-          <button className="btn primary big" onClick={() => start('classic')} disabled={!!starting || noWords}>
+          <button className="btn primary big" onClick={() => start('classic')} disabled={!!starting}>
             {starting === 'classic' ? 'Picking a word…' : 'START GAME'}
           </button>
-          <p className="mode-note">Classic: one random word from your repository, the same for both of you.</p>
-          {noWords && (
-            <button className="btn text small" onClick={() => go('/words')}>Add some words to the repository first</button>
-          )}
+          <p className="mode-note">Classic: a random word from the dictionary, the same for both of you.</p>
         </div>
         <div className="mode-or" aria-hidden="true"><span>or</span></div>
         <div className="mode-choice">
@@ -157,7 +153,7 @@ function ActiveCard({ game, me, partner, partnerHere }: { game: GameView; me: Pl
 }
 
 export function Home() {
-  const { me, partner, players, history, words, online } = useStore();
+  const { me, partner, players, history, online } = useStore();
   if (!me || !partner) return null;
   const recent = (history ?? []).slice(0, 3);
   return (
@@ -226,11 +222,6 @@ export function Home() {
           <span className="link-icon"><Icon name="chart" /></span>
           <span className="link-title">Stats</span>
           <span className="link-sub">{history ? `${history.length} game${history.length === 1 ? '' : 's'}` : ' '}</span>
-        </button>
-        <button className="link-card" onClick={() => go('/words')}>
-          <span className="link-icon"><Icon name="book" /></span>
-          <span className="link-title">Word repository</span>
-          <span className="link-sub">{words ? `${words.length} word${words.length === 1 ? '' : 's'}` : ' '}</span>
         </button>
         <button className="link-card" onClick={() => go('/history')}>
           <span className="link-icon"><Icon name="history" /></span>

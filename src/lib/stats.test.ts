@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { awards, headToHead, nemesisLetter, playerStats, repoStats, setterStats, wordDifficulties } from './stats';
-import type { HistoryGame, HistoryPlayer, Slot, WordRow } from './types';
+import { awards, headToHead, nemesisLetter, playerStats, wordDifficulties } from './stats';
+import type { HistoryGame, HistoryPlayer, Slot } from './types';
 import { evaluate } from './wordle';
 
 let n = 0;
@@ -31,10 +31,7 @@ const games: HistoryGame[] = [
   // 5: Sachin solves in 2
   game('PLANT', 1, round(1, 'PLANT', ['SLANT', 'PLANT'], 30_000, T), round(2, 'PLANT', ['AUDIO', 'TRAIN', 'PLANT'], 45_000, T)),
 ];
-const words: WordRow[] = ['CRANE', 'NYMPH', 'PLANT', 'BRICK', 'HOUSE', 'JAZZY'].map((w, i) => ({
-  id: i, word: w, added_by: (['BRICK', 'HOUSE', 'JAZZY'].includes(w) ? 2 : 1) as Slot, in_dictionary: true,
-  created_at: '', times_played: w === 'BRICK' ? 0 : 1, last_played_at: null,
-}));
+
 
 describe('playerStats', () => {
   const s = playerStats(games, 1);
@@ -83,19 +80,6 @@ it('difficulty treats a fail as 7', () => {
   expect(d.PLANT).toBe(2.5);
 });
 
-it('setter stats', () => {
-  const s1 = setterStats(games, words, 1); // CRANE 3.5, NYMPH 7, PLANT 2.5
-  expect(s1.contributed).toBe(3);
-  expect(s1.played).toBe(3);
-  expect(s1.avgAttempts).toBeCloseTo((3.5 + 7 + 2.5) / 3);
-  expect(s1.avgAttemptsForPartner).toBeCloseTo((4 + 7 + 3) / 3);
-  expect(s1.partnerFails).toBe(1);
-});
-
-it('repoStats', () => {
-  expect(repoStats(words)).toEqual({ total: 6, bySlot: { 1: 3, 2: 3 }, played: 5, neverPlayed: 1 });
-});
-
 it('nemesis letter ignores gray duplicates of letters that are in the word', () => {
   // Answer ABIDE, guess SPEED: second E is gray but E is in the word -> not a miss.
   const g = game('ABIDE', 1, round(1, 'ABIDE', ['SPEED', 'ABIDE'], 1, T), round(2, 'ABIDE', ['ABIDE'], 1, T));
@@ -105,14 +89,14 @@ it('nemesis letter ignores gray duplicates of letters that are in the word', () 
 });
 
 it('awards', () => {
-  const a = Object.fromEntries(awards(games, words, { 1: 'Sachin', 2: 'Menaka' }, (ms) => `${ms / 1000}s`).map((x) => [x.id, x]));
+  const a = Object.fromEntries(awards(games, { 1: 'Sachin', 2: 'Menaka' }, (ms) => `${ms / 1000}s`).map((x) => [x.id, x]));
   expect(a.brutal.value).toBe('NYMPH');
   expect(a.easy.value).toBe('PLANT');
   expect(a.clutch.value).toBe('Menaka');
   expect(a.comeback.value).toBe('Sachin');
   expect(a.speed.value).toBe('Sachin'); // 80s vs 96.25s
-  expect(a.setter.value).toBe('Tied');
-  expect(a.hardest.value).toBe('Menaka'); // HOUSE 4, JAZZY 6 -> 5 vs 4.33
+  expect(a.setter).toBeUndefined(); // repository awards retired in v1.3
+  expect(a.hardest).toBeUndefined();
 });
 
 describe('challenge mode', () => {
@@ -123,9 +107,8 @@ describe('challenge mode', () => {
     players: [round(1, 'CRANE', ['SLATE', 'TRACE', 'CRANE'], 50_000, T), round(2, 'JAZZY', ['AUDIO', 'TRAIN', 'PIZZA', 'FIZZY', 'DIZZY', 'TIZZY'], 90_000, T)],
   };
   const all = [...games, ch];
-  it('is left out of word difficulty and setter stats', () => {
+  it('is left out of word difficulty', () => {
     expect(wordDifficulties(all).find((w) => w.word === 'CRANE')?.plays).toBe(1);
-    expect(setterStats(all, words, 1).played).toBe(3);
   });
   it('counts in player stats and head to head, split by mode', () => {
     expect(playerStats(all, 1).played).toBe(6);
@@ -135,7 +118,7 @@ describe('challenge mode', () => {
     expect(h.byMode.classic.games).toBe(5);
   });
   it('awards the toughest challenger', () => {
-    const a = Object.fromEntries(awards(all, words, { 1: 'Sachin', 2: 'Menaka' }, (ms) => `${ms}`).map((x) => [x.id, x]));
+    const a = Object.fromEntries(awards(all, { 1: 'Sachin', 2: 'Menaka' }, (ms) => `${ms}`).map((x) => [x.id, x]));
     expect(a.challenger.value).toBe('Sachin'); // Menaka needed 7 (failed) vs Sachin 3
   });
 });

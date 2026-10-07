@@ -19,6 +19,8 @@
   --yellow: #d6aa3b;
   --gray: #8d847b;
   --tile-text: #ffffff;
+  --key-out: #b03a33;          /* keyboard: letter ruled out */
+  --key-out-ink: rgba(255, 255, 255, 0.72);
 
   --p1: #3d7cc0;
   --p1-soft: #e3eefa;
@@ -56,6 +58,8 @@
     --green: #589a53;
     --yellow: #c79f38;
     --gray: #3e3832;
+    --key-out: #8f2a25;
+    --key-out-ink: rgba(255, 255, 255, 0.6);
     --p1: #72a7e0;
     --p1-soft: #1f2a37;
     --p2: #f07d99;
@@ -81,6 +85,8 @@
   --green: #589a53;
   --yellow: #c79f38;
   --gray: #3e3832;
+  --key-out: #8f2a25;
+  --key-out-ink: rgba(255, 255, 255, 0.6);
   --p1: #72a7e0;
   --p1-soft: #1f2a37;
   --p2: #f07d99;
@@ -301,7 +307,7 @@ textarea { resize: vertical; min-height: 120px; font-family: ui-monospace, SFMon
 .recent-sub { font-weight: 500; color: var(--ink-2); }
 .recent-row svg, .history-row svg { color: var(--ink-3); flex: none; }
 
-.home-links { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.home-links { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
 .link-card {
   border: 0; background: var(--surface); box-shadow: var(--shadow); border-radius: var(--radius-sm);
   padding: 14px 12px; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; color: var(--ink);
@@ -413,7 +419,7 @@ textarea { resize: vertical; min-height: 120px; font-family: ui-monospace, SFMon
 .key.wide { flex: 1.55; font-size: 0.74rem; letter-spacing: 0.04em; }
 .key.correct { background: var(--green); color: #fff; }
 .key.present { background: var(--yellow); color: #fff; }
-.key.absent { background: var(--gray); color: color-mix(in srgb, #fff 75%, transparent); }
+.key.absent { background: var(--key-out); color: var(--key-out-ink); }
 
 .finished-panel { flex: none; background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow-lg); padding: 16px; display: flex; flex-direction: column; gap: 12px; animation: screen-in 300ms ease both; }
 .finished-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }

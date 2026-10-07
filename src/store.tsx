@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { api, ApiError, friendlyError } from './lib/api';
 import { deviceId, getSlot, setSlot as saveSlot, stripLegacyInvite } from './lib/identity';
 import { RoomChannel, type ChangeKind, type PresenceInfo, type Screen } from './lib/realtime';
-import type { GameView, HistoryGame, Player, Slot, WordRow } from './lib/types';
+import type { GameView, HistoryGame, Player, Slot } from './lib/types';
 import { load, save } from './lib/storage';
 import { APP_VERSION } from './lib/versions';
 import { go, useRoute } from './router';
@@ -19,7 +19,6 @@ interface Store {
   players: Record<Slot, Player>;
   me: Player | null;
   partner: Player | null;
-  words: WordRow[] | null;
   history: HistoryGame[] | null;
   active: GameView | null;
   activeLoaded: boolean;
@@ -32,7 +31,6 @@ interface Store {
 
   chooseSlot: (s: Slot) => void;
   setPlayers: (p: Player[]) => void;
-  refreshWords: () => Promise<void>;
   refreshHistory: () => Promise<void>;
   refreshActive: () => Promise<void>;
   setActive: (g: GameView | null) => void;
@@ -57,7 +55,7 @@ const DEFAULT_PLAYERS: Record<Slot, Player> = {
 
 function screenFor(path: string): Screen {
   const first = path.split('/')[1] || 'home';
-  return (['home', 'game', 'words', 'stats', 'history', 'settings'] as Screen[]).includes(first as Screen) ? (first as Screen) : 'other';
+  return (['home', 'game', 'stats', 'history', 'settings'] as Screen[]).includes(first as Screen) ? (first as Screen) : 'other';
 }
 
 export function StoreProvider({ children }: { children: ReactNode }) {
@@ -65,7 +63,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useState(() => stripLegacyInvite());
   const [slot, setSlotState] = useState<Slot | null>(() => getSlot());
   const [players, setPlayersState] = useState<Record<Slot, Player>>(DEFAULT_PLAYERS);
-  const [words, setWords] = useState<WordRow[] | null>(null);
   const [history, setHistory] = useState<HistoryGame[] | null>(null);
   const [active, setActiveState] = useState<GameView | null>(null);
   const [activeLoaded, setActiveLoaded] = useState(false);
@@ -102,14 +99,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   }, [setPlayers]);
 
-  const refreshWords = useCallback(async () => {
-    try {
-      setWords(await api.listWords());
-    } catch (e) {
-      reportError(e);
-    }
-  }, [reportError]);
-
   const refreshHistory = useCallback(async () => {
     try {
       setHistory(await api.getHistory());
@@ -140,9 +129,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     prevActive.current = active;
     if (before && !active) {
       void refreshHistory();
-      void refreshWords();
     }
-  }, [active, refreshHistory, refreshWords]);
+  }, [active, refreshHistory]);
 
   // Just updated itself? Say so once, with a link to what's new.
   useEffect(() => {
@@ -158,9 +146,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // Initial load.
   useEffect(() => {
     void refreshRoom();
-    void refreshWords();
     void refreshHistory();
-  }, [refreshRoom, refreshWords, refreshHistory]);
+  }, [refreshRoom, refreshHistory]);
   useEffect(() => {
     void refreshActive();
   }, [refreshActive]);
@@ -187,7 +174,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             }
             if (p.what === 'finished') void refreshHistory();
           }
-          if (p.kind === 'words') void refreshWords();
           if (p.kind === 'room') void refreshRoom();
         },
         onPresence: (others) => setPresence(others),
@@ -208,7 +194,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       channel.current = null;
       setRealtime(false);
     };
-  }, [slot, refreshActive, refreshWords, refreshRoom, refreshHistory, toast]);
+  }, [slot, refreshActive, refreshRoom, refreshHistory, toast]);
 
   // Tell the partner which screen we're on.
   const screen = screenFor(route.path);
@@ -263,7 +249,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       players,
       me: slot ? players[slot] : null,
       partner: slot ? players[(3 - slot) as Slot] : null,
-      words,
       history,
       active,
       activeLoaded,
@@ -274,7 +259,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       toasts,
       chooseSlot,
       setPlayers,
-      refreshWords,
       refreshHistory,
       refreshActive,
       setActive,
@@ -283,8 +267,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       dismissToast,
       reportError,
     }),
-    [slot, players, words, history, active, activeLoaded, pulse, online, realtime, presence, toasts,
-      chooseSlot, setPlayers, refreshWords, refreshHistory, refreshActive, setActive, ping, toast, dismissToast, reportError],
+    [slot, players, history, active, activeLoaded, pulse, online, realtime, presence, toasts,
+      chooseSlot, setPlayers, refreshHistory, refreshActive, setActive, ping, toast, dismissToast, reportError],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

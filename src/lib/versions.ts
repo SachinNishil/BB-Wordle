@@ -9,6 +9,16 @@ export interface Release {
 
 export const VERSIONS: Release[] = [
   {
+    version: '1.3.0',
+    date: '2026-10-07',
+    changes: [
+      'A fresh start: all the test games are cleared, so scores, history and stats begin from zero with game #1.',
+      'No more word repository. Classic now picks a random word from the whole dictionary (over 12,000 words) and never repeats one until every word has been played.',
+      'Want to choose the words yourselves? That is what Challenge mode is for.',
+      'Letters ruled out on the keyboard now turn red, so they are impossible to miss.',
+    ],
+  },
+  {
     version: '1.2.0',
     date: '2026-10-07',
     changes: [

@@ -8,7 +8,6 @@ import { NotConfigured, WhoAreYou } from './screens/Onboarding';
 import { SettingsScreen } from './screens/Settings';
 import { StatsScreen } from './screens/Stats';
 import { VersionsScreen } from './screens/Versions';
-import { WordsScreen } from './screens/Words';
 import { StoreProvider, useStore } from './store';
 
 function Routes() {
@@ -18,8 +17,6 @@ function Routes() {
   switch (parts[0]) {
     case 'game':
       return <GameScreen key={parts[1] ?? 'active'} id={parts[1]} />;
-    case 'words':
-      return <WordsScreen />;
     case 'stats':
       return <StatsScreen />;
     case 'history':

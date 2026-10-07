@@ -28,7 +28,7 @@ function Distribution({ s, color }: { s: PlayerStats; color: string }) {
 }
 
 export function StatsScreen() {
-  const { history, words, players, refreshHistory } = useStore();
+  const { history, players, refreshHistory } = useStore();
   const [distFor, setDistFor] = useState<Slot>(1);
   useEffect(() => {
     void refreshHistory();
@@ -38,7 +38,7 @@ export function StatsScreen() {
   const s = useMemo(() => ({ 1: playerStats(games, 1), 2: playerStats(games, 2) }), [games]);
   const h = useMemo(() => headToHead(games), [games]);
   const names = { 1: players[1].name, 2: players[2].name };
-  const fun = useMemo(() => awards(games, words ?? [], names, fmtDuration), [games, words, names[1], names[2]]); // eslint-disable-line
+  const fun = useMemo(() => awards(games, names, fmtDuration), [games, names[1], names[2]]); // eslint-disable-line
 
   if (history === null) {
     return (
