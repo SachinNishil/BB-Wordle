@@ -7,6 +7,7 @@ import { Keyboard } from '../components/Keyboard';
 import { Elapsed, SideCard } from '../components/Live';
 import { fromGameView, ResultsView } from '../components/Results';
 import { WordTiles } from '../components/Tiles';
+import { TauntLayer, TrashTalk } from '../components/TrashTalk';
 import { api, ApiError } from '../lib/api';
 import { serverNow } from '../lib/clock';
 import { loadDictionary } from '../lib/dictionary';
@@ -50,6 +51,11 @@ export function GameScreen({ id }: { id?: string }) {
   const joining = useRef(false);
   const beginning = useRef(false);
   const prevPartner = useRef<string | null>(null);
+  // Spectator mode (v1.4): once my round is over, watch my partner's board.
+  const [watch, setWatch] = useState<'partner' | 'mine' | null>(null);
+  const [partnerReveal, setPartnerReveal] = useState<number | null>(null);
+  const sawPlaying = useRef(false);
+  const prevPartnerCount = useRef<number | null>(null);
 
   const me = slot ? players[slot] : null;
   const partner = slot ? players[(3 - slot) as 1 | 2] : null;
@@ -95,6 +101,26 @@ export function GameScreen({ id }: { id?: string }) {
   }, [reload, pulse]);
 
   const phase = phaseOf(game, loaded);
+  if (phase === 'playing') sawPlaying.current = true;
+  const finishedNow = phase === 'finished' && revealRow === null;
+
+  // Straight after finishing, let the win (or the answer) sink in, then switch to watching.
+  useEffect(() => {
+    if (!finishedNow || watch) return;
+    const t = setTimeout(() => setWatch('partner'), sawPlaying.current ? 2400 : 0);
+    return () => clearTimeout(t);
+  }, [finishedNow, watch]);
+
+  // Flip in each new row my partner plays while I'm watching.
+  const partnerCount = game?.partner.guesses ? game.partner.guesses.length : null;
+  useEffect(() => {
+    const prev = prevPartnerCount.current;
+    prevPartnerCount.current = partnerCount;
+    if (prev === null || partnerCount === null || partnerCount !== prev + 1) return;
+    setPartnerReveal(partnerCount - 1);
+    const t = setTimeout(() => setPartnerReveal(null), REVEAL_MS);
+    return () => clearTimeout(t);
+  }, [partnerCount]);
 
   // Opening the game screen means "I'm here".
   useEffect(() => {
@@ -380,8 +406,10 @@ export function GameScreen({ id }: { id?: string }) {
         </header>
         <ResultsView data={fromGameView(game)} isToday />
         <div className="stack pad">
+          {slot && <TrashTalk game={game} slot={slot} players={players} onGame={apply} variant="card" />}
           <button className="btn primary" onClick={() => go('/', true)}>Back home</button>
         </div>
+        {slot && <TauntLayer taunts={game.taunts} slot={slot} partner={partner} />}
       </div>
     );
   }
@@ -496,6 +524,54 @@ export function GameScreen({ id }: { id?: string }) {
   }
 
   if (!game) return null;
+
+  if (finishedNow && watch && slot) {
+    const theirs = watch === 'partner';
+    const pg = game.partner.guesses ?? [];
+    const notStarted = game.partner.status === 'waiting' || game.partner.status === 'ready';
+    const theirWord = game.mode === 'challenge' ? game.partner_answer : game.answer;
+    return (
+      <div className="screen game spectate">
+        <header className="topbar">
+          <button className="iconbtn" onClick={() => back('/')} aria-label="Back"><Icon name="back" /></button>
+          <h1 className="topbar-title"><span className="live-pill"><i className="dot" /> Live</span> 👀 Watching {partner.name}</h1>
+          <div className="topbar-right" />
+        </header>
+        <div className="vs-strip">
+          <SideCard player={me} view={game.me} isMe align="left" />
+          <span className="vs-chip">VS</span>
+          <SideCard player={partner} view={game.partner} isMe={false} onBoard={partnerOnBoard} align="right" />
+        </div>
+        <div className="segmented small spectate-tabs" role="tablist">
+          <button role="tab" aria-selected={theirs} className={theirs ? 'on' : ''} onClick={() => setWatch('partner')}>{partner.name}'s board</button>
+          <button role="tab" aria-selected={!theirs} className={!theirs ? 'on' : ''} onClick={() => setWatch('mine')}>Your board</button>
+        </div>
+        <div className="spectate-line">
+          {theirs ? (
+            notStarted ? <span>{partner.name} hasn't started yet. Warm up the trash talk.</span> : (
+              <>
+                <span>{game.mode === 'challenge' ? 'Hunting for your word' : 'Hunting for'}</span>
+                {theirWord && <WordTiles word={theirWord} size={22} />}
+              </>
+            )
+          ) : (
+            <>
+              <span>{game.me.status === 'solved' ? `You solved it in ${game.me.guess_count}` : game.me.gave_up ? 'You gave up' : 'Out of guesses'} · <Elapsed startedAt={game.me.started_at} durationMs={game.me.duration_ms} /></span>
+              {game.answer && <WordTiles word={game.answer} size={22} />}
+            </>
+          )}
+        </div>
+        {theirs ? (
+          <Board key="partner" guesses={pg} current="" revealRow={partnerReveal} shake={false} bounceRow={null} active={false} label={`${partner.name}'s guesses`} />
+        ) : (
+          <Board key="mine" guesses={game.me.guesses} current="" revealRow={null} shake={false} bounceRow={null} active={false} />
+        )}
+        <TrashTalk game={game} slot={slot} players={players} onGame={apply} variant="dock" />
+        <TauntLayer taunts={game.taunts} slot={slot} partner={partner} />
+      </div>
+    );
+  }
+
   const guesses = game.me.guesses;
   const keyStates = keyboardStates(revealing ? guesses.slice(0, revealRow!) : guesses);
   const finishedView = phase === 'finished' && !revealing;
@@ -551,6 +627,8 @@ export function GameScreen({ id }: { id?: string }) {
       ) : (
         <Keyboard states={keyStates} onKey={onKey} disabled={phase !== 'playing' || submitting} />
       )}
+
+      {slot && <TauntLayer taunts={game.taunts} slot={slot} partner={partner} />}
 
       {phase === 'countdown' && cdTarget && (
         <Countdown target={cdTarget} onGo={begin}

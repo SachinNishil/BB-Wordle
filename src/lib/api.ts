@@ -32,6 +32,9 @@ const FRIENDLY: Record<string, string> = {
   no_room: 'The database needs setting up. Run schema.sql in Supabase.',
   bad_photo: "That photo couldn't be used.",
   bad_name: 'Names need 1 to 24 characters.',
+  not_your_turn_to_talk: 'Finish your own round first, then the trash talk can begin.',
+  bad_taunt: 'Keep it to 60 characters.',
+  too_fast: 'Easy, easy. Give it a second.',
 };
 
 export function friendlyError(e: unknown): string {
@@ -81,6 +84,8 @@ export const api = {
   beginRound: (slot: Slot, gameId: string) => call<GameState>('begin_round', { ...K, p_slot: slot, p_game_id: gameId }),
   submitGuess: (slot: Slot, gameId: string, guess: string, attempt: number) =>
     call<GuessResult>('submit_guess', { ...K, p_slot: slot, p_game_id: gameId, p_guess: guess, p_attempt: attempt }),
+  sendTaunt: (slot: Slot, gameId: string, body: string) =>
+    call<GameState>('send_taunt', { ...K, p_slot: slot, p_game_id: gameId, p_body: body }),
   giveUp: (slot: Slot, gameId: string) => call<GameState>('give_up', { ...K, p_slot: slot, p_game_id: gameId }),
   cancelGame: (slot: Slot, gameId: string) => call<boolean>('cancel_game', { ...K, p_slot: slot, p_game_id: gameId }),
   getHistory: (limit: number | null = null) => call<HistoryGame[]>('get_history', { ...K, p_limit: limit }),

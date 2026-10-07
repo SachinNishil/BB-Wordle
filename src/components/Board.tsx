@@ -13,9 +13,10 @@ interface Props {
   bounceRow: number | null;
   /** Show the current typing row. */
   active: boolean;
+  label?: string;
 }
 
-export function Board({ guesses, current, revealRow, shake, bounceRow, active }: Props) {
+export function Board({ guesses, current, revealRow, shake, bounceRow, active, label = 'Your guesses' }: Props) {
   const wrap = useRef<HTMLDivElement>(null);
   const [tile, setTile] = useState(56);
 
@@ -45,7 +46,7 @@ export function Board({ guesses, current, revealRow, shake, bounceRow, active }:
 
   return (
     <div className="board-wrap" ref={wrap}>
-      <div className="board" style={{ ['--tile' as string]: `${tile}px` }} role="grid" aria-label="Your guesses">
+      <div className="board" style={{ ['--tile' as string]: `${tile}px` }} role="grid" aria-label={label}>
         {rows.map((row, r) => (
           <div key={r} role="row"
             className={`row${row.kind === 'typing' && shake ? ' shake' : ''}${bounceRow === r ? ' bounce' : ''}`}>

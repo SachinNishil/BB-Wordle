@@ -36,8 +36,16 @@ export interface MeView extends PlayerViewBase {
 }
 export interface PartnerView extends PlayerViewBase {
   patterns: string[];
-  /** Only once the whole game is complete. */
+  /** Their words: only once MY round is over (spectator mode) or the game is complete. */
   guesses: GuessRow[] | null;
+}
+
+/** Trash talk sent while spectating (v1.4). */
+export interface Taunt {
+  id: number;
+  from: Slot;
+  body: string;
+  at: string;
 }
 
 export type GameMode = 'classic' | 'challenge';
@@ -65,6 +73,8 @@ export interface GameView {
   partner_has_set: boolean;
   me: MeView;
   partner: PartnerView;
+  /** Trash talk in this game, oldest first (last 40). Missing on older servers. */
+  taunts?: Taunt[];
 }
 
 export interface GameState {

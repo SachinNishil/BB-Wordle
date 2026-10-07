@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { renderResultImage } from '../lib/shareImage';
 import { fmtDate, fmtDuration } from '../lib/clock';
 import type { GameMode, GameResult, GameView, GuessRow, HistoryGame, Player, PlayerStatus, Slot } from '../lib/types';
 import { patternToEmoji } from '../lib/wordle';
@@ -75,6 +76,7 @@ export function shareText(d: ResultData, players: Record<Slot, Player>) {
 export function ResultsView({ data, title, isToday }: { data: ResultData; title?: string; isToday?: boolean }) {
   const { players, toast } = useStore();
   const [showWords, setShowWords] = useState(false);
+  const [imageOpen, setImageOpen] = useState(false);
   const winner = data.winner ? players[data.winner] : null;
   const slots: Slot[] = [1, 2];
   const solvedMs = (x: ResultSide) => (x.status === 'solved' ? x.duration_ms : null);
@@ -196,13 +198,76 @@ export function ResultsView({ data, title, isToday }: { data: ResultData; title?
           </div>
         ))}
       </div>
-      <div className="results-actions">
+      <div className="results-actions three">
         <button className="btn ghost" onClick={() => setShowWords((x) => !x)}>
           <Icon name="eye" size={18} /> {showWords ? 'Hide guesses' : 'Show guesses'}
         </button>
         <button className="btn ghost" onClick={share}>
-          <Icon name="share" size={18} /> Share
+          <Icon name="text" size={18} /> Share as text
         </button>
+        <button className="btn ghost" onClick={() => setImageOpen(true)}>
+          <Icon name="image" size={18} /> Share as image
+        </button>
+      </div>
+      {imageOpen && <ShareImageModal data={data} players={players} onClose={() => setImageOpen(false)} />}
+    </div>
+  );
+}
+
+/** Builds the picture first, then shares it on a second tap (iPhones only allow sharing straight from a tap). */
+function ShareImageModal({ data, players, onClose }: { data: ResultData; players: Record<Slot, Player>; onClose: () => void }) {
+  const { toast } = useStore();
+  const [file, setFile] = useState<File | null>(null);
+  const [url, setUrl] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  const name = `wordle-for-two-${data.number}.png`;
+  // Freeze what we draw when the sheet opens (the parent re-renders on every sync).
+  const [snap] = useState(() => ({ data, players }));
+
+  useEffect(() => {
+    let gone = false;
+    let made: string | null = null;
+    renderResultImage(snap.data, snap.players)
+      .then((blob) => {
+        if (gone) return;
+        made = URL.createObjectURL(blob);
+        setFile(new File([blob], name, { type: 'image/png' }));
+        setUrl(made);
+      })
+      .catch(() => !gone && setFailed(true));
+    return () => {
+      gone = true;
+      if (made) URL.revokeObjectURL(made);
+    };
+  }, [snap, name]);
+
+  const canShare = !!file && typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] });
+
+  async function shareIt() {
+    if (!file) return;
+    try {
+      await navigator.share({ files: [file], title: `Wordle for Two #${data.number}` });
+    } catch (e) {
+      if ((e as Error)?.name !== 'AbortError') toast('Sharing didn\'t work here. Save the image instead.', 'error');
+    }
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal share-modal" role="dialog" aria-modal="true" aria-label="Share as image" onClick={(e) => e.stopPropagation()}>
+        <h3>Share as image</h3>
+        {url ? <img className="share-preview" src={url} alt={`Game #${data.number}: both boards`} /> : failed ? (
+          <p className="muted">Couldn't draw the picture on this device.</p>
+        ) : <div className="loader" aria-label="Drawing the picture" />}
+        {url && <p className="muted small">Tip: you can also press and hold the picture to save or copy it.</p>}
+        <div className="modal-actions">
+          {canShare ? (
+            <button className="btn primary" onClick={shareIt}><Icon name="share" size={18} /> Share</button>
+          ) : url ? (
+            <a className="btn primary" href={url} download={name}><Icon name="download" size={18} /> Save image</a>
+          ) : null}
+          <button className="btn ghost" onClick={onClose}>Close</button>
+        </div>
       </div>
     </div>
   );

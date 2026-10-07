@@ -9,6 +9,16 @@ export interface Release {
 
 export const VERSIONS: Release[] = [
   {
+    version: '1.4.0',
+    date: '2026-10-07',
+    changes: [
+      'Spectator mode: once your round is over, watch your partner play live, letters and all. Flip back to your own board any time.',
+      'Trash talk: while you watch, send emojis, quick lines or anything you type (up to 60 characters). It pops up on their screen mid-game. They can reply once they finish, and the banter carries on under the results.',
+      'Share as image: one picture with both full boards, the answer, who won, guesses and times. It sits next to Show guesses and Share as text on the results.',
+      'Ruled-out letters on the keyboard are now dark grey instead of red: clearly out, easier on the eyes.',
+    ],
+  },
+  {
     version: '1.3.0',
     date: '2026-10-07',
     changes: [
