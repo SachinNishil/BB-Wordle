@@ -93,6 +93,10 @@ export const api = {
     call<GuessResult>('submit_guess', { ...K, p_slot: slot, p_game_id: gameId, p_guess: guess, p_attempt: attempt }),
   sendTaunt: (slot: Slot, gameId: string, body: string) =>
     call<GameState>('send_taunt', { ...K, p_slot: slot, p_game_id: gameId, p_body: body }),
+  setDraft: (slot: Slot, gameId: string, row: number, text: string) =>
+    call<boolean>('set_draft', { ...K, p_slot: slot, p_game_id: gameId, p_row: row, p_text: text }),
+  markTauntsSeen: (slot: Slot, gameId: string, upto: number) =>
+    call<boolean>('mark_taunts_seen', { ...K, p_slot: slot, p_game_id: gameId, p_upto: upto }),
   giveUp: (slot: Slot, gameId: string) => call<GameState>('give_up', { ...K, p_slot: slot, p_game_id: gameId }),
   cancelGame: (slot: Slot, gameId: string) => call<boolean>('cancel_game', { ...K, p_slot: slot, p_game_id: gameId }),
   getHistory: (limit: number | null = null) => call<HistoryGame[]>('get_history', { ...K, p_limit: limit }),

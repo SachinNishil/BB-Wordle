@@ -11,7 +11,7 @@ import { TrashTalk, useFeedTaunts } from '../components/TrashTalk';
 import { api, ApiError } from '../lib/api';
 import { serverNow } from '../lib/clock';
 import { loadDictionary } from '../lib/dictionary';
-import type { GameView } from '../lib/types';
+import type { GameView, MeView } from '../lib/types';
 import { keyboardStates } from '../lib/wordle';
 import { back, go } from '../router';
 import { useStore } from '../store';
@@ -34,7 +34,8 @@ function phaseOf(g: GameView | null, loaded: boolean): Phase {
 
 export function GameScreen({ id }: { id?: string }) {
   const store = useStore();
-  const { slot, players, active, activeLoaded, pulse, ping, toast, reportError, setActive, sendTyping, partnerTyping } = store;
+  const { slot, players, active, activeLoaded, pulse, ping, toast, reportError, setActive, sendTyping, partnerTyping, setQuietInvites } = store;
+  const [rematching, setRematching] = useState(false);
   const [gameId, setGameId] = useState<string | null>(id ?? null);
   const [game, setGame] = useState<GameView | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -122,6 +123,49 @@ export function GameScreen({ id }: { id?: string }) {
     const t = setInterval(() => sendTyping(gid, myRow, typed), 3000);
     return () => clearInterval(t);
   }, [phase, partnerDone, gid, myRow, typed, sendTyping]);
+  // Backup (v1.6.1): also save the row to the server (a moment after typing stops),
+  // so a spectator sees it even if the live connection on either phone has dropped
+  // or this phone hasn't heard yet that they finished. The server only shows it to
+  // a partner whose own round is over.
+  const draftSent = useRef('');
+  useEffect(() => {
+    if (phase !== 'playing' || !gid || !slot) return;
+    const key = `${gid}|${myRow}|${typed}`;
+    if (draftSent.current === key) return;
+    const t = setTimeout(() => {
+      draftSent.current = key;
+      api.setDraft(slot, gid, myRow, typed).catch(() => { draftSent.current = ''; });
+    }, typed ? 250 : 0);
+    return () => clearTimeout(t);
+  }, [phase, gid, slot, myRow, typed]);
+
+  // Rematch (v1.6.1): on the results screen, a new game from my partner turns the
+  // Rematch button into "Join rematch" instead of popping up a notice.
+  useEffect(() => {
+    setQuietInvites(phase === 'results');
+    return () => setQuietInvites(false);
+  }, [phase, setQuietInvites]);
+  const nextGame = phase === 'results' && active && game && active.id !== game.id ? active : null;
+  const invitedBy = nextGame && slot && nextGame.created_by !== slot ? players[nextGame.created_by] : null;
+  useEffect(() => {
+    if (invitedBy) navigator.vibrate?.([30, 60, 30]);
+  }, [invitedBy?.slot, nextGame?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function rematch() {
+    if (!game || !slot) return;
+    if (nextGame) return go(`/game/${nextGame.id}`, true);
+    setRematching(true);
+    try {
+      const s = await api.startGame(slot, game.mode ?? 'classic');
+      setActive(s.game);
+      ping('game', s.already_active ? 'joined' : game.mode === 'challenge' ? 'challenged' : 'started');
+      if (s.game) go(`/game/${s.game.id}`, true);
+    } catch (e) {
+      reportError(e);
+    } finally {
+      setRematching(false);
+    }
+  }
 
   // Flip in each new row my partner plays while I'm watching.
   const partnerCount = game?.partner.guesses ? game.partner.guesses.length : null;
@@ -419,7 +463,13 @@ export function GameScreen({ id }: { id?: string }) {
         <ResultsView data={fromGameView(game)} isToday />
         <div className="stack pad">
           {slot && <TrashTalk game={game} slot={slot} players={players} onGame={apply} variant="card" />}
-          <button className="btn primary" onClick={() => go('/', true)}>Back home</button>
+          <div className="rematch">
+            {invitedBy && <p className="rematch-note">🔁 {invitedBy.name} is up for a rematch</p>}
+            <button className={`btn primary big${invitedBy ? ' glow' : ''}`} onClick={rematch} disabled={rematching}>
+              {invitedBy ? 'JOIN REMATCH' : nextGame ? 'BACK TO THE REMATCH' : game.mode === 'challenge' ? 'REMATCH ⚔️' : 'REMATCH'}
+            </button>
+            <button className="btn text" onClick={() => go('/', true)}>Back home</button>
+          </div>
         </div>
       </div>
     );
@@ -541,8 +591,12 @@ export function GameScreen({ id }: { id?: string }) {
     const pg = game.partner.guesses ?? [];
     const notStarted = game.partner.status === 'waiting' || game.partner.status === 'ready';
     const theirWord = game.mode === 'challenge' ? game.partner_answer : game.answer;
-    const live = partnerTyping && partnerTyping.game === game.id && partnerTyping.row === pg.length
-      && game.partner.status === 'playing' && Date.now() - partnerTyping.at < 20000 ? partnerTyping.text : null;
+    // Live typing: the newer of the live message and the server's copy.
+    const fromLive = partnerTyping && partnerTyping.game === game.id && partnerTyping.row === pg.length
+      && Date.now() - partnerTyping.at < 20000 ? { text: partnerTyping.text, at: partnerTyping.at + (serverNow() - Date.now()) } : null;
+    const fromServer = game.partner.draft != null && game.partner.draft_at ? { text: game.partner.draft, at: Date.parse(game.partner.draft_at) || 0 } : null;
+    const newest = fromLive && fromServer ? (fromLive.at >= fromServer.at - 300 ? fromLive : fromServer) : fromLive ?? fromServer;
+    const live = game.partner.status === 'playing' && newest ? newest.text : null;
     return (
       <div className="screen game spectate">
         <header className="topbar">
@@ -553,7 +607,10 @@ export function GameScreen({ id }: { id?: string }) {
         <div className="vs-strip">
           <SideCard player={me} view={game.me} isMe align="left" />
           <span className="vs-chip">VS</span>
-          <SideCard player={partner} view={game.partner} isMe={false} align="right" />
+          <SideCard player={partner} isMe={false} align="right"
+            view={partnerReveal !== null && theirs
+              ? { ...game.partner, patterns: game.partner.patterns.slice(0, partnerReveal), guess_count: partnerReveal, status: 'playing', duration_ms: null, gave_up: false }
+              : game.partner} />
         </div>
         <div className="segmented small spectate-tabs" role="tablist">
           <button role="tab" aria-selected={theirs} className={theirs ? 'on' : ''} onClick={() => setWatch('partner')}>{partner.name}'s board</button>
@@ -587,6 +644,11 @@ export function GameScreen({ id }: { id?: string }) {
 
   const guesses = game.me.guesses;
   const keyStates = keyboardStates(revealing ? guesses.slice(0, revealRow!) : guesses);
+  // The small score card waits for the board: while a row is flipping, it still
+  // shows the state from before that guess (v1.6.1).
+  const myCard: MeView = revealing
+    ? { ...game.me, guesses: guesses.slice(0, revealRow!), guess_count: revealRow!, status: 'playing', duration_ms: null, gave_up: false }
+    : game.me;
   const finishedView = phase === 'finished' && !revealing;
 
   return (
@@ -604,7 +666,7 @@ export function GameScreen({ id }: { id?: string }) {
       </header>
 
       <div className="vs-strip">
-        <SideCard player={me} view={game.me} isMe align="left" />
+        <SideCard player={me} view={myCard} isMe align="left" />
         <span className="vs-chip">VS</span>
         <SideCard player={partner} view={game.partner} isMe={false} align="right" />
       </div>

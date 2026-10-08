@@ -13,9 +13,9 @@ const RECENT_MS = 10 * 60 * 1000; // don't pop up anything older than 10 minutes
 type Shown = Record<string, number[]>; // game id -> taunt ids already shown
 
 let shown: Shown = load<Shown>(KEY, {});
-const listeners = new Set<(t: Taunt[]) => void>();
+const listeners = new Set<(gameId: string, t: Taunt[]) => void>();
 
-export function onNewTaunts(fn: (t: Taunt[]) => void) {
+export function onNewTaunts(fn: (gameId: string, t: Taunt[]) => void) {
   listeners.add(fn);
   return () => {
     listeners.delete(fn);
@@ -43,5 +43,5 @@ export function feedTaunts(gameId: string | undefined, taunts: Taunt[] | undefin
   }
   shown = next;
   save(KEY, shown);
-  if (fresh.length) for (const l of listeners) l(fresh.slice(-3));
+  if (fresh.length) for (const l of listeners) l(gameId, fresh.slice(-3));
 }

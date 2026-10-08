@@ -34,6 +34,8 @@ interface Store {
   /** Settings › Classic words, shared by both phones (v1.6). */
   wordSettings: WordSettings | null;
   setWordSettingsLocal: (w: WordSettings) => void;
+  /** The results screen shows its own Rematch button, so no "started a game" toast there (v1.6.1). */
+  setQuietInvites: (quiet: boolean) => void;
   toasts: Toast[];
   /** What my partner is typing right now (spectator mode, v1.5). */
   partnerTyping: (TypingInfo & { at: number }) | null;
@@ -87,6 +89,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [tick, setTick] = useState(0);
   const roomSeen = useRef<{ status: string | null | undefined; words: string | undefined } | null>(null);
   const screenRef = useRef<string>('home');
+  const quietInvites = useRef(false);
+  const setQuietInvites = useCallback((q: boolean) => { quietInvites.current = q; }, []);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [partnerTyping, setPartnerTyping] = useState<Store['partnerTyping']>(null);
   // Bumped to rebuild the live channel after the app comes back from the background.
@@ -207,7 +211,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           if (p.kind === 'game') {
             setPulse((x) => x + 1);
             void refreshActive();
-            if ((p.what === 'started' || p.what === 'challenged') && p.slot && p.slot !== slot) {
+            if ((p.what === 'started' || p.what === 'challenged') && p.slot && p.slot !== slot && !quietInvites.current) {
               navigator.vibrate?.([30, 60, 30]);
               const from = namesRef.current[p.slot].name;
               toast(p.what === 'challenged' ? `⚔️ ${from} challenged you!` : `${from} started a game!`, 'info', {
@@ -266,7 +270,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     // and spectating need to feel live even if the channel has quietly dropped.
     const done = (x?: string) => x === 'solved' || x === 'failed';
     const hot = !!active && done(active.me.status) !== done(active.partner.status);
-    const ms = hot ? 3000 : realtime ? (screen === 'game' ? 10000 : 15000) : screen === 'game' ? 2500 : 8000;
+    const watching = hot && (active!.me.status === 'solved' || active!.me.status === 'failed') && screen === 'game';
+    const ms = watching ? 2000 : hot ? 3000 : realtime ? (screen === 'game' ? 10000 : 15000) : screen === 'game' ? 2500 : 8000;
     const t = setInterval(() => {
       if (document.visibilityState !== 'visible') return;
       setPulse((x) => x + 1);
@@ -349,6 +354,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       partnerOnline,
       wordSettings,
       setWordSettingsLocal: setWordSettings,
+      setQuietInvites,
       toasts,
       chooseSlot,
       setPlayers,

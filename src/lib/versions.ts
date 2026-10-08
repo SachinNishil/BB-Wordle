@@ -9,6 +9,19 @@ export interface Release {
 
 export const VERSIONS: Release[] = [
   {
+    version: '1.6.1',
+    date: '2026-10-08',
+    changes: [
+      'The small score card at the top now waits for the board: a new row of colours (and the guess count) appears there only once the tiles have finished flipping. Same for your partner\'s card while you spectate.',
+      'Fixed: trash talk was invisible on iPhones with Reduce Motion switched on (Settings › Accessibility › Motion). The messages arrived but faded out instantly. They now stay on screen either way.',
+      'Trash talk now shows "Seen by Menaka" (or Sachin) under your message once it has popped up on their screen, so you know it landed.',
+      'Fixed: two speech bubbles on the home screen no longer overlap. Each sits above its own photo.',
+      'Trash talk pop-ups stay at the top: at most two at a time, and never lower than the first row of the board.',
+      'Live typing while spectating is more reliable: the letters are also saved to the server, so you still see them within a couple of seconds when a phone\'s live connection has dropped.',
+      'Rematch button at the bottom of the results. If your partner starts the next game first, it turns into Join rematch (no more pop-up notice there).',
+    ],
+  },
+  {
     version: '1.6.0',
     date: '2026-10-07',
     changes: [

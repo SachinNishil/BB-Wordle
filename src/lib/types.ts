@@ -59,6 +59,9 @@ export interface PartnerView extends PlayerViewBase {
   patterns: string[];
   /** Their words: only once MY round is over (spectator mode) or the game is complete. */
   guesses: GuessRow[] | null;
+  /** What they're typing in their current row (only while I spectate, v1.6.1). */
+  draft?: string | null;
+  draft_at?: string | null;
 }
 
 /** Trash talk sent while spectating (v1.4). */
@@ -67,6 +70,8 @@ export interface Taunt {
   from: Slot;
   body: string;
   at: string;
+  /** Has the partner's phone shown it? (v1.6.1) */
+  seen?: boolean;
 }
 
 export type GameMode = 'classic' | 'challenge';

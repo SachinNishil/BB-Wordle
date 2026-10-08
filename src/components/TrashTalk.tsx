@@ -1,7 +1,7 @@
 // Trash talk (v1.4). Once your own round is over you can send your partner
 // emojis, ready-made lines or anything you type (up to 60 characters). They
 // pop up on your partner's screen while they play.
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { api } from '../lib/api';
 import { feedTaunts, onNewTaunts } from '../lib/tauntFeed';
 import type { GameView, Player, Slot } from '../lib/types';
@@ -43,6 +43,8 @@ export function TrashTalk({ game, slot, players, onGame, variant }: {
   const partner = players[(3 - slot) as Slot];
   const taunts = game.taunts ?? [];
   const recent = variant === 'dock' ? taunts.slice(-1) : taunts;
+  const last = taunts[taunts.length - 1];
+  const lastMine = last && last.from === slot ? last : null;
   const logRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -85,6 +87,9 @@ export function TrashTalk({ game, slot, players, onGame, variant }: {
               <span>{t.body}</span>
             </p>
           ))}
+          {lastMine && (
+            <span className={`trash-seen${lastMine.seen ? ' yes' : ''}`}>{lastMine.seen ? `Seen by ${partner.name} ✓` : 'Sent'}</span>
+          )}
         </div>
       )}
       {variant === 'card' && recent.length === 0 && <p className="muted small">No trash talk this game. Yet.</p>}
@@ -113,38 +118,61 @@ export function TrashTalk({ game, slot, players, onGame, variant }: {
   );
 }
 
-interface Bubble { id: number; body: string; emoji: boolean; x: number }
+interface Bubble { id: number; body: string; emoji: boolean; x: number; leaving?: boolean }
 
 /**
  * Pops your partner's new messages up over whatever screen you're on (one
  * instance, in App). Never blocks taps or typing. Fed by lib/tauntFeed.
  */
 export function TauntLayer() {
-  const { slot, players } = useStore();
+  const { slot, players, ping } = useStore();
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
+  const layer = useRef<HTMLDivElement>(null);
+  // Never lower than the bottom of the board's first row (on the game screen).
+  useLayoutEffect(() => {
+    const el = layer.current;
+    if (!el) return;
+    const row = document.querySelector('.board .row');
+    const room = row ? row.getBoundingClientRect().bottom - el.getBoundingClientRect().top : 260;
+    el.style.maxHeight = `${Math.max(70, Math.round(room))}px`;
+  }, [bubbles]);
   const partner = slot ? players[(3 - slot) as Slot] : null;
+  const slotRef = useRef(slot);
+  slotRef.current = slot;
 
   useEffect(
     () =>
-      onNewTaunts((fresh) => {
+      onNewTaunts((gameId, fresh) => {
         navigator.vibrate?.(25);
         const add = fresh.map((t, i) => ({ id: t.id, body: t.body, emoji: isEmojiOnly(t.body), x: Math.round(Math.random() * 50 - 25) + i * 4 }));
-        setBubbles((b) => [...b.filter((x) => !add.some((a) => a.id === x.id)), ...add].slice(-5));
-        for (const a of add) setTimeout(() => setBubbles((b) => b.filter((x) => x.id !== a.id)), a.emoji ? 2600 : 4200);
+        // At most two at a time, and never lower than the board's first row.
+        setBubbles((b) => [...b.filter((x) => !add.some((a) => a.id === x.id)), ...add].slice(-2));
+        for (const a of add) {
+          const life = a.emoji ? 2800 : 4800;
+          setTimeout(() => setBubbles((b) => b.map((x) => (x.id === a.id ? { ...x, leaving: true } : x))), life - 400);
+          setTimeout(() => setBubbles((b) => b.filter((x) => x.id !== a.id)), life);
+        }
+        // Tell the sender it landed ("Seen" under their message).
+        const s = slotRef.current;
+        if (s && document.visibilityState === 'visible') {
+          api.markTauntsSeen(s, gameId, Math.max(...fresh.map((t) => t.id)))
+            .then(() => ping('game', 'seen'))
+            .catch(() => {});
+        }
       }),
-    [],
+    [ping],
   );
 
   if (!bubbles.length || !partner) return null;
   return (
-    <div className="taunt-layer" aria-live="polite">
+    <div className="taunt-layer" aria-live="polite" ref={layer}>
       {bubbles.map((b) =>
         b.emoji ? (
           <span key={b.id} className="taunt-emoji-wrap" style={{ transform: `translateX(${b.x}vw)` }}>
-            <span className="taunt-emoji">{b.body}</span>
+            <span className={`taunt-emoji${b.leaving ? ' leaving' : ''}`}>{b.body}</span>
           </span>
         ) : (
-          <span key={b.id} className="taunt-bubble">
+          <span key={b.id} className={`taunt-bubble${b.leaving ? ' leaving' : ''}`}>
             <Avatar player={partner} size={22} />
             <span><b>{partner.name}:</b> {b.body}</span>
           </span>
