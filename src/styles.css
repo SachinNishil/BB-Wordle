@@ -767,6 +767,26 @@ textarea { resize: vertical; min-height: 120px; font-family: ui-monospace, SFMon
 .chat-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .chat-title { display: inline-flex; align-items: center; gap: 8px; font-weight: 800; }
 @media (prefers-reduced-motion: reduce) { .chat-sheet { animation: none !important; } }
+/* v1.8.1: the chat takes the board's place, typed on the Wordle keyboard below. */
+.chat-panel {
+  flex: 1 1 auto; min-height: 0; margin: 10px 0; background: var(--surface); border-radius: var(--radius);
+  box-shadow: var(--shadow); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px;
+  animation: pop-in 200ms ease;
+}
+.chat-panel .trash-log { flex: 1 1 auto; min-height: 0; max-height: none; overflow-y: auto; padding: 2px; }
+.chat-empty { margin: auto 0; text-align: center; }
+.chat-draft {
+  flex: 1; min-width: 0; min-height: 42px; max-height: 64px; overflow: hidden; padding: 10px 14px; border-radius: 22px;
+  background: var(--surface-2); border: 1.5px solid var(--line-strong); font-size: 1rem; line-height: 1.3;
+  overflow-wrap: anywhere; text-align: left; display: flex; flex-wrap: wrap; align-items: center; align-content: center; justify-content: flex-start;
+}
+.chat-placeholder { color: var(--ink-3); margin-left: 2px; }
+.chat-panel .trash-emojis, .chat-panel .trash-lines, .chat-panel .trash-compose, .chat-panel .chat-head { flex: none; }
+.chat-draft .caret { display: inline-block; width: 2px; height: 1.1em; margin-left: 1px; vertical-align: -0.15em; background: var(--p1); animation: blink 1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.keyboard.chat .key.space { flex: 5; font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); }
+.keyboard.chat .key.send { background: var(--primary); color: var(--primary-ink); }
+@media (max-height: 700px) { .keyboard.chat .key { height: 40px; } .chat-panel { margin: 6px 0; padding: 8px 10px; } }
 
 .solo-link {
   align-self: center; display: block; text-align: center; border: 0; background: none; padding: 6px 10px;

@@ -32,7 +32,7 @@ const FRIENDLY: Record<string, string> = {
   no_room: 'The database needs setting up. Run schema.sql in Supabase.',
   bad_photo: "That photo couldn't be used.",
   bad_name: 'Names need 1 to 24 characters.',
-  not_your_turn_to_talk: 'Finish your own round first, then the trash talk can begin.',
+  not_your_turn_to_talk: 'Chatting mid-game needs the latest schema.sql. Run it once in Supabase.',
   bad_taunt: 'Keep it to 60 characters.',
   too_fast: 'Easy, easy. Give it a second.',
   dictionary_outdated: 'The word list needs updating. Run the new dictionary.sql in Supabase.',

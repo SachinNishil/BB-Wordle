@@ -9,6 +9,15 @@ export interface Release {
 
 export const VERSIONS: Release[] = [
   {
+    version: '1.8.1',
+    date: '2026-10-10',
+    changes: [
+      'Chat now uses the game\'s own keyboard: tap the chat box and type straight away, with SEND, space, ? and !. No phone keyboard popping up over the game.',
+      'The chat takes the board\'s place while it\'s open, so the newest messages are always in view on any phone size. Done brings the board back.',
+      'Chat works the whole game, not only after you finish (needs the latest schema.sql in Supabase).',
+    ],
+  },
+  {
     version: '1.8.0',
     date: '2026-10-10',
     changes: [

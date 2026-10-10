@@ -30,6 +30,117 @@ export function isEmojiOnly(text: string) {
   return /\p{Extended_Pictographic}/u.test(text) && !/[\p{L}\p{N}]/u.test(text.replace(/\p{Extended_Pictographic}/gu, ''));
 }
 
+/** Sentence case for text typed on the Wordle keyboard (which only has capitals). */
+export function chatCase(raw: string) {
+  const lower = raw.toLowerCase().replace(/\bi\b/g, 'I');
+  return lower.replace(/(^\s*|[.!?]\s+)([a-z])/g, (_m, a: string, b: string) => a + b.toUpperCase());
+}
+
+/** Sending a message: saves it, pushes it to the partner's phone, nudges a refresh. */
+export function useSendTaunt(game: GameView | null, slot: Slot | null, onGame: (g: GameView) => void) {
+  const { ping, pushTaunt, reportError } = useStore();
+  const [sending, setSending] = useState(false);
+  async function send(body: string): Promise<boolean> {
+    const b = body.trim();
+    if (!b || sending || !game || !slot) return false;
+    setSending(true);
+    try {
+      const r = await api.sendTaunt(slot, game.id, b.slice(0, TAUNT_MAX));
+      if (r.game) {
+        onGame(r.game);
+        const mine = [...(r.game.taunts ?? [])].reverse().find((t) => t.from === slot);
+        if (mine) pushTaunt(game.id, mine);
+      }
+      ping('game', 'taunt');
+      navigator.vibrate?.(12);
+      return true;
+    } catch (e) {
+      reportError(e);
+      return false;
+    } finally {
+      setSending(false);
+    }
+  }
+  return { send, sending };
+}
+
+/**
+ * The chat while playing or spectating (v1.8.1). It takes the board's place and is typed on
+ * the Wordle keyboard below it (no phone keyboard on top), so nothing overlaps on any screen
+ * size: the log fills whatever room there is and scrolls to the newest message.
+ */
+export function ChatPanel({ game, slot, players, draft, onSent, sendNow, onClose }: {
+  game: GameView;
+  slot: Slot;
+  players: Record<Slot, Player>;
+  draft: string;
+  /** Called after a message went out (clear the draft). */
+  onSent: () => void;
+  sendNow: (body: string) => Promise<boolean>;
+  onClose: () => void;
+}) {
+  const partner = players[(3 - slot) as Slot];
+  const taunts = game.taunts ?? [];
+  const last = taunts[taunts.length - 1];
+  const lastMine = last && last.from === slot ? last : null;
+  const [showLines, setShowLines] = useState(false);
+  const logRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = logRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [taunts.length, lastMine?.seen]);
+  // Keep the newest message in view when the space changes (rotation, smaller screen, emoji row swap).
+  useEffect(() => {
+    const el = logRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => { el.scrollTop = el.scrollHeight; });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const text = chatCase(draft);
+  async function quick(body: string) {
+    if (await sendNow(body)) setShowLines(false);
+  }
+  return (
+    <div className="chat-panel" role="region" aria-label={`Chat with ${partner.name}`}>
+      <div className="chat-head">
+        <span className="chat-title"><Avatar player={partner} size={22} /> Chat with {partner.name}</span>
+        <button type="button" className="btn text small" onClick={onClose}>Done</button>
+      </div>
+      <div className="trash-log" ref={logRef}>
+        {taunts.length === 0 && <p className="muted small chat-empty">Say something. Type on the keyboard below.</p>}
+        {taunts.map((t) => (
+          <p key={t.id} className={`trash-msg ${t.from === slot ? 'mine' : 'theirs'}${isEmojiOnly(t.body) ? ' emoji' : ''}`}>
+            {t.from !== slot && <Avatar player={players[t.from]} size={18} />}
+            <span>{t.body}</span>
+          </p>
+        ))}
+        {lastMine && <span className={`trash-seen${lastMine.seen ? ' yes' : ''}`}>{lastMine.seen ? `Seen by ${partner.name} ✓` : 'Sent'}</span>}
+      </div>
+      {showLines ? (
+        <div className="trash-lines" role="group" aria-label="Quick lines">
+          {TAUNT_LINES.map((l) => <button key={l} className="trash-line" onClick={() => quick(l)}>{l}</button>)}
+        </div>
+      ) : (
+        <div className="trash-emojis" role="group" aria-label="Send an emoji">
+          {TAUNT_EMOJIS.map((e) => <button key={e} className="trash-emoji" onClick={() => quick(e)} aria-label={`Send ${e}`}>{e}</button>)}
+        </div>
+      )}
+      <div className="trash-compose">
+        <button type="button" className={`trash-more${showLines ? ' on' : ''}`} onClick={() => setShowLines((x) => !x)}
+          aria-label="Quick lines" aria-expanded={showLines}>💬</button>
+        <div className={`chat-draft${text ? '' : ' empty'}`} aria-label="Your message" role="textbox" aria-readonly="true">
+          {text}<i className="caret" aria-hidden="true" />{!text && <span className="chat-placeholder">Message {partner.name}…</span>}
+        </div>
+        <button type="button" className="trash-send" disabled={!text.trim()} aria-label="Send"
+          onClick={async () => { if (await sendNow(text)) onSent(); }}>
+          <Icon name="send" size={18} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /** Composer + messages. `dock` sits under the board while spectating (no log: the chat box shows it);
  *  `card` lives on the results screen; `sheet` is the chat opened from the chat box. */
 export function TrashTalk({ game, slot, players, onGame, variant, onClose }: {
@@ -118,7 +229,7 @@ export function TrashTalk({ game, slot, players, onGame, variant, onClose }: {
           ))}
         </div>
       )}
-      <form className="trash-compose" onSubmit={(e) => { e.preventDefault(); void send(text); }}>
+      {variant !== 'dock' && <form className="trash-compose" onSubmit={(e) => { e.preventDefault(); void send(text); }}>
         <button type="button" className={`trash-more${showLines ? ' on' : ''}`} onClick={() => setShowLines((x) => !x)}
           aria-label="Quick lines" aria-expanded={showLines}>💬</button>
         <input className="text-input trash-input" value={text} maxLength={TAUNT_MAX} onChange={(e) => setText(e.target.value)}
@@ -126,7 +237,7 @@ export function TrashTalk({ game, slot, players, onGame, variant, onClose }: {
         <button type="submit" className="trash-send" disabled={sending || !text.trim()} aria-label="Send">
           <Icon name="send" size={18} />
         </button>
-      </form>
+      </form>}
     </div>
   );
 }

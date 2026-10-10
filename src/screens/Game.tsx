@@ -7,7 +7,7 @@ import { Keyboard } from '../components/Keyboard';
 import { Elapsed, PartnerMini } from '../components/Live';
 import { fromGameView, ResultsView } from '../components/Results';
 import { WordTiles } from '../components/Tiles';
-import { ChatBox, TrashTalk, useFeedTaunts } from '../components/TrashTalk';
+import { ChatBox, ChatPanel, TAUNT_MAX, TrashTalk, chatCase, useFeedTaunts, useSendTaunt } from '../components/TrashTalk';
 import { api, ApiError } from '../lib/api';
 import { serverNow } from '../lib/clock';
 import { loadDictionary } from '../lib/dictionary';
@@ -37,6 +37,9 @@ export function GameScreen({ id }: { id?: string }) {
   const { slot, players, active, activeLoaded, pulse, ping, toast, reportError, setActive, sendTyping, partnerTyping, setQuietInvites } = store;
   const [rematching, setRematching] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [chatText, setChatText] = useState('');
+  const chatOpenRef = useRef(false);
+  chatOpenRef.current = chatOpen;
   const [gameId, setGameId] = useState<string | null>(id ?? null);
   const [game, setGame] = useState<GameView | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -347,8 +350,29 @@ export function GameScreen({ id }: { id?: string }) {
     }
   }
 
+  const { send: sendTaunt } = useSendTaunt(game, slot, apply);
+  useEffect(() => {
+    if (phase === 'results') setChatOpen(false);
+  }, [phase]);
+  // v1.8.1: while the chat is open, the Wordle keyboard types the message.
+  const onChatKey = useCallback(
+    (k: string) => {
+      if (k === 'Escape') return setChatOpen(false);
+      if (k === 'Enter') {
+        const body = chatCase(chatText);
+        if (body.trim()) void sendTaunt(body).then((ok) => ok && setChatText(''));
+        return;
+      }
+      if (k === 'Backspace') return setChatText((t) => t.slice(0, -1));
+      if (k === ' ') return setChatText((t) => (t && !t.endsWith(' ') && t.length < TAUNT_MAX ? t + ' ' : t));
+      if ([...k].length === 1 || /\p{Extended_Pictographic}/u.test(k)) setChatText((t) => (t.length + k.length <= TAUNT_MAX ? t + k : t));
+    },
+    [chatText, sendTaunt],
+  );
+
   const onKey = useCallback(
     (k: string) => {
+      if (chatOpen) return onChatKey(k);
       if (picking && !submitting) {
         if (k === 'Enter') void submitPick();
         else if (k === 'Backspace') setPick((t) => t.slice(0, -1));
@@ -360,7 +384,7 @@ export function GameScreen({ id }: { id?: string }) {
       else if (k === 'Backspace') setTyped((t) => t.slice(0, -1));
       else if (/^[a-z]$/i.test(k)) setTyped((t) => (t.length < 5 ? t + k.toUpperCase() : t));
     },
-    [phase, submitting, revealing, submit, picking, submitPick],
+    [phase, submitting, revealing, submit, picking, submitPick, chatOpen, onChatKey],
   );
 
   // Physical keyboard.
@@ -374,7 +398,8 @@ export function GameScreen({ id }: { id?: string }) {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
-      if (e.key === 'Enter' || e.key === 'Backspace' || /^[a-z]$/i.test(e.key)) {
+      const chatting = chatOpenRef.current && (e.key.length === 1 || e.key === 'Escape');
+      if (chatting || e.key === 'Enter' || e.key === 'Backspace' || /^[a-z]$/i.test(e.key)) {
         e.preventDefault();
         keyRef.current(e.key);
       }
@@ -594,14 +619,13 @@ export function GameScreen({ id }: { id?: string }) {
 
   if (!game) return null;
 
-  // The chat opened from the chat box: covers the top of the screen; tap outside or Done to close.
-  const chatSheet = chatOpen && slot ? (
-    <div className="chat-sheet-backdrop" onClick={() => setChatOpen(false)}>
-      <div className="chat-sheet" role="dialog" aria-modal="true" aria-label={`Chat with ${partner.name}`} onClick={(e) => e.stopPropagation()}>
-        <TrashTalk game={game} slot={slot} players={players} onGame={apply} variant="sheet" onClose={() => setChatOpen(false)} />
-      </div>
-    </div>
+  // The chat (v1.8.1) takes the board's place and uses the Wordle keyboard, so nothing overlaps.
+  const closeChat = () => setChatOpen(false);
+  const chatPanel = chatOpen && slot ? (
+    <ChatPanel game={game} slot={slot} players={players} draft={chatText}
+      sendNow={sendTaunt} onSent={() => setChatText('')} onClose={closeChat} />
   ) : null;
+  const chatKeyboard = <Keyboard states={{}} onKey={onKey} chat />;
 
   if (finishedNow && watch && slot) {
     const theirs = watch === 'partner';
@@ -621,12 +645,13 @@ export function GameScreen({ id }: { id?: string }) {
           <h1 className="topbar-title">👀 Watching {partner.name}</h1>
           <div className="topbar-right" />
         </header>
-        <div className="vs-strip chat-strip">
+        {!chatPanel && <div className="vs-strip chat-strip">
           <ChatBox game={game} slot={slot} players={players} onOpen={() => setChatOpen(true)} />
           <PartnerMini player={partner}
             patterns={partnerReveal !== null && theirs ? game.partner.patterns.slice(0, partnerReveal) : game.partner.patterns}
             status={partnerReveal !== null && theirs ? 'playing' : game.partner.status} />
-        </div>
+        </div>}
+        {chatPanel ? <>{chatPanel}{chatKeyboard}</> : <>
         <div className="segmented small spectate-tabs" role="tablist">
           <button role="tab" aria-selected={theirs} className={theirs ? 'on' : ''} onClick={() => setWatch('partner')}>{partner.name}'s board</button>
           <button role="tab" aria-selected={!theirs} className={!theirs ? 'on' : ''} onClick={() => setWatch('mine')}>Your board</button>
@@ -653,7 +678,7 @@ export function GameScreen({ id }: { id?: string }) {
           <Board key="mine" guesses={game.me.guesses} current="" revealRow={null} shake={false} bounceRow={null} active={false} />
         )}
         <TrashTalk game={game} slot={slot} players={players} onGame={apply} variant="dock" />
-        {chatSheet}
+        </>}
       </div>
     );
   }
@@ -678,10 +703,11 @@ export function GameScreen({ id }: { id?: string }) {
       </header>
 
       {/* v1.7 experiment: chat on the left (my own card just repeated my board), partner on the right. */}
-      <div className="vs-strip chat-strip">
+      {!chatPanel && <div className="vs-strip chat-strip">
         {slot && <ChatBox game={game} slot={slot} players={players} onOpen={() => setChatOpen(true)} />}
         <PartnerMini player={partner} patterns={game.partner.patterns} status={game.partner.status} />
-      </div>
+      </div>}
+      {chatPanel ? <>{chatPanel}{chatKeyboard}</> : <>
       {game.partner.status === 'solved' && game.me.status !== 'solved' && game.me.status !== 'failed' && (
         <p className="partner-news">{game.mode === 'challenge' ? `🏆 ${partner.name} has solved the word you picked.` : "🏆 Your partner has solved today's word."}</p>
       )}
@@ -714,13 +740,12 @@ export function GameScreen({ id }: { id?: string }) {
       ) : (
         <Keyboard states={keyStates} onKey={onKey} disabled={phase !== 'playing' || submitting} />
       )}
+      </>}
 
       {phase === 'countdown' && cdTarget && (
         <Countdown target={cdTarget} onGo={begin}
           label={cdTarget === Date.parse(game.starts_at ?? '') ? `${me.name} vs ${partner.name}` : `${partner.name} is already playing. Your clock starts on GO.`} />
       )}
-
-      {chatSheet}
 
       {confirmGiveUp && (
         <div className="modal-backdrop" onClick={() => setConfirmGiveUp(false)}>
