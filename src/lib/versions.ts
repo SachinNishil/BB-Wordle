@@ -9,6 +9,23 @@ export interface Release {
 
 export const VERSIONS: Release[] = [
   {
+    version: '1.8.0',
+    date: '2026-10-10',
+    changes: [
+      'Solo: plain Wordle on your own, just for fun. It\'s the small "Or play solo" link under the game card on the home screen. No score, no stats, nothing shared with your partner.',
+    ],
+  },
+  {
+    version: '1.7.0',
+    date: '2026-10-10',
+    changes: [
+      'Experiment: the small card at the top left of the board is now a chat box. Tap it to chat with your partner any time during a game, not just after you finish.',
+      'Text messages show only in the chat box (no pop-ups over the board). Emoji-only messages still burst over the board.',
+      'Your partner\'s side is now just their name over their mini board, so the chat box gets most of the width. Your own time moved up next to the game number.',
+      'Tapping the chat box slides the chat down from the top (about half the screen) with your recent messages, emojis and a box to type in.',
+    ],
+  },
+  {
     version: '1.6.1',
     date: '2026-10-08',
     changes: [

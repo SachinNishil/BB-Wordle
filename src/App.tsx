@@ -7,6 +7,7 @@ import { HistoryDetail, HistoryScreen } from './screens/History';
 import { Home } from './screens/Home';
 import { NotConfigured, WhoAreYou } from './screens/Onboarding';
 import { SettingsScreen } from './screens/Settings';
+import { SoloScreen } from './screens/Solo';
 import { StatsScreen } from './screens/Stats';
 import { VersionsScreen } from './screens/Versions';
 import { StoreProvider, useStore } from './store';
@@ -22,6 +23,8 @@ function Routes() {
       return <StatsScreen />;
     case 'history':
       return parts[1] ? <HistoryDetail id={parts[1]} /> : <HistoryScreen />;
+    case 'solo':
+      return <SoloScreen />;
     case 'settings':
       return <SettingsScreen />;
     case 'versions':

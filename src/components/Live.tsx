@@ -67,3 +67,14 @@ export function SideCard({ player, view, isMe, align }: {
     </div>
   );
 }
+
+/** v1.7: just the partner's name over their colours-only mini board (frees room for the chat box). */
+export function PartnerMini({ player, patterns, status }: { player: Player; patterns: string[]; status: string }) {
+  const done = status === 'solved' ? ' win' : status === 'failed' ? ' lose' : '';
+  return (
+    <div className={`partner-mini${done}`} aria-label={`${player.name}: ${patterns.length} guesses`}>
+      <span className="partner-mini-name">{player.name}{status === 'solved' ? ' ✓' : ''}</span>
+      <MiniGrid patterns={patterns} cell={10} gap={2} />
+    </div>
+  );
+}

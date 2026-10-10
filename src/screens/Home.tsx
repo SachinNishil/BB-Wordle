@@ -275,6 +275,9 @@ export function Home() {
       <Couple me={me} partner={partner} />
 
       <GameCard />
+      <button className="solo-link" onClick={() => go('/solo')}>
+        <span>Or play <b>solo</b>, just for fun (no score, nothing shared) ›</span>
+      </button>
 
       <InstallHint />
 

@@ -4,14 +4,14 @@ import { Board, REVEAL_MS } from '../components/Board';
 import { Countdown } from '../components/Countdown';
 import { Icon } from '../components/Icon';
 import { Keyboard } from '../components/Keyboard';
-import { Elapsed, SideCard } from '../components/Live';
+import { Elapsed, PartnerMini } from '../components/Live';
 import { fromGameView, ResultsView } from '../components/Results';
 import { WordTiles } from '../components/Tiles';
-import { TrashTalk, useFeedTaunts } from '../components/TrashTalk';
+import { ChatBox, TrashTalk, useFeedTaunts } from '../components/TrashTalk';
 import { api, ApiError } from '../lib/api';
 import { serverNow } from '../lib/clock';
 import { loadDictionary } from '../lib/dictionary';
-import type { GameView, MeView } from '../lib/types';
+import type { GameView } from '../lib/types';
 import { keyboardStates } from '../lib/wordle';
 import { back, go } from '../router';
 import { useStore } from '../store';
@@ -36,6 +36,7 @@ export function GameScreen({ id }: { id?: string }) {
   const store = useStore();
   const { slot, players, active, activeLoaded, pulse, ping, toast, reportError, setActive, sendTyping, partnerTyping, setQuietInvites } = store;
   const [rematching, setRematching] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
   const [gameId, setGameId] = useState<string | null>(id ?? null);
   const [game, setGame] = useState<GameView | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -166,6 +167,13 @@ export function GameScreen({ id }: { id?: string }) {
       setRematching(false);
     }
   }
+
+  // Chat (v1.7): mark my partner's messages seen once they're on my game screen.
+  const unseenTop = (game?.taunts ?? []).filter((t) => slot && t.from !== slot && !t.seen).reduce((m, t) => Math.max(m, t.id), 0);
+  useEffect(() => {
+    if (!unseenTop || !slot || !gid || document.visibilityState !== 'visible') return;
+    api.markTauntsSeen(slot, gid, unseenTop).then(() => ping('game', 'seen')).catch(() => {});
+  }, [unseenTop, slot, gid, ping]);
 
   // Flip in each new row my partner plays while I'm watching.
   const partnerCount = game?.partner.guesses ? game.partner.guesses.length : null;
@@ -586,6 +594,15 @@ export function GameScreen({ id }: { id?: string }) {
 
   if (!game) return null;
 
+  // The chat opened from the chat box: covers the top of the screen; tap outside or Done to close.
+  const chatSheet = chatOpen && slot ? (
+    <div className="chat-sheet-backdrop" onClick={() => setChatOpen(false)}>
+      <div className="chat-sheet" role="dialog" aria-modal="true" aria-label={`Chat with ${partner.name}`} onClick={(e) => e.stopPropagation()}>
+        <TrashTalk game={game} slot={slot} players={players} onGame={apply} variant="sheet" onClose={() => setChatOpen(false)} />
+      </div>
+    </div>
+  ) : null;
+
   if (finishedNow && watch && slot) {
     const theirs = watch === 'partner';
     const pg = game.partner.guesses ?? [];
@@ -604,13 +621,11 @@ export function GameScreen({ id }: { id?: string }) {
           <h1 className="topbar-title">👀 Watching {partner.name}</h1>
           <div className="topbar-right" />
         </header>
-        <div className="vs-strip">
-          <SideCard player={me} view={game.me} isMe align="left" />
-          <span className="vs-chip">VS</span>
-          <SideCard player={partner} isMe={false} align="right"
-            view={partnerReveal !== null && theirs
-              ? { ...game.partner, patterns: game.partner.patterns.slice(0, partnerReveal), guess_count: partnerReveal, status: 'playing', duration_ms: null, gave_up: false }
-              : game.partner} />
+        <div className="vs-strip chat-strip">
+          <ChatBox game={game} slot={slot} players={players} onOpen={() => setChatOpen(true)} />
+          <PartnerMini player={partner}
+            patterns={partnerReveal !== null && theirs ? game.partner.patterns.slice(0, partnerReveal) : game.partner.patterns}
+            status={partnerReveal !== null && theirs ? 'playing' : game.partner.status} />
         </div>
         <div className="segmented small spectate-tabs" role="tablist">
           <button role="tab" aria-selected={theirs} className={theirs ? 'on' : ''} onClick={() => setWatch('partner')}>{partner.name}'s board</button>
@@ -638,17 +653,13 @@ export function GameScreen({ id }: { id?: string }) {
           <Board key="mine" guesses={game.me.guesses} current="" revealRow={null} shake={false} bounceRow={null} active={false} />
         )}
         <TrashTalk game={game} slot={slot} players={players} onGame={apply} variant="dock" />
+        {chatSheet}
       </div>
     );
   }
 
   const guesses = game.me.guesses;
   const keyStates = keyboardStates(revealing ? guesses.slice(0, revealRow!) : guesses);
-  // The small score card waits for the board: while a row is flipping, it still
-  // shows the state from before that guess (v1.6.1).
-  const myCard: MeView = revealing
-    ? { ...game.me, guesses: guesses.slice(0, revealRow!), guess_count: revealRow!, status: 'playing', duration_ms: null, gave_up: false }
-    : game.me;
   const finishedView = phase === 'finished' && !revealing;
 
   return (
@@ -657,6 +668,7 @@ export function GameScreen({ id }: { id?: string }) {
         <button className="iconbtn" onClick={() => back('/')} aria-label="Back"><Icon name="back" /></button>
         <h1 className="topbar-title">
           {game.mode === 'challenge' ? 'Challenge ⚔️' : `Game #${game.number}`}
+          {game.me.started_at && <span className="topbar-clock"> · <Elapsed startedAt={game.me.started_at} durationMs={game.me.duration_ms} /></span>}
         </h1>
         <div className="topbar-right">
           {phase === 'playing' && (
@@ -665,10 +677,10 @@ export function GameScreen({ id }: { id?: string }) {
         </div>
       </header>
 
-      <div className="vs-strip">
-        <SideCard player={me} view={myCard} isMe align="left" />
-        <span className="vs-chip">VS</span>
-        <SideCard player={partner} view={game.partner} isMe={false} align="right" />
+      {/* v1.7 experiment: chat on the left (my own card just repeated my board), partner on the right. */}
+      <div className="vs-strip chat-strip">
+        {slot && <ChatBox game={game} slot={slot} players={players} onOpen={() => setChatOpen(true)} />}
+        <PartnerMini player={partner} patterns={game.partner.patterns} status={game.partner.status} />
       </div>
       {game.partner.status === 'solved' && game.me.status !== 'solved' && game.me.status !== 'failed' && (
         <p className="partner-news">{game.mode === 'challenge' ? `🏆 ${partner.name} has solved the word you picked.` : "🏆 Your partner has solved today's word."}</p>
@@ -707,6 +719,8 @@ export function GameScreen({ id }: { id?: string }) {
         <Countdown target={cdTarget} onGo={begin}
           label={cdTarget === Date.parse(game.starts_at ?? '') ? `${me.name} vs ${partner.name}` : `${partner.name} is already playing. Your clock starts on GO.`} />
       )}
+
+      {chatSheet}
 
       {confirmGiveUp && (
         <div className="modal-backdrop" onClick={() => setConfirmGiveUp(false)}>

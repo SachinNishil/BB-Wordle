@@ -1,10 +1,12 @@
-// Trash talk (v1.4). Once your own round is over you can send your partner
-// emojis, ready-made lines or anything you type (up to 60 characters). They
-// pop up on your partner's screen while they play.
+// Trash talk / chat. v1.4: once your round was over you could send your partner
+// emojis and messages. v1.7 (experiment): chat any time during a game from the
+// small box at the top left of the board. Emoji-only messages still burst over
+// the board; text only shows in the chat box.
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { api } from '../lib/api';
 import { feedTaunts, onNewTaunts } from '../lib/tauntFeed';
 import type { GameView, Player, Slot } from '../lib/types';
+import { go } from '../router';
 import { useStore } from '../store';
 import { Avatar } from './Avatar';
 import { Icon } from './Icon';
@@ -28,13 +30,15 @@ export function isEmojiOnly(text: string) {
   return /\p{Extended_Pictographic}/u.test(text) && !/[\p{L}\p{N}]/u.test(text.replace(/\p{Extended_Pictographic}/gu, ''));
 }
 
-/** Composer + recent messages. `dock` sits under the board while spectating; `card` lives on the results screen. */
-export function TrashTalk({ game, slot, players, onGame, variant }: {
+/** Composer + messages. `dock` sits under the board while spectating (no log: the chat box shows it);
+ *  `card` lives on the results screen; `sheet` is the chat opened from the chat box. */
+export function TrashTalk({ game, slot, players, onGame, variant, onClose }: {
   game: GameView;
   slot: Slot;
   players: Record<Slot, Player>;
   onGame: (g: GameView) => void;
-  variant: 'dock' | 'card';
+  variant: 'dock' | 'card' | 'sheet';
+  onClose?: () => void;
 }) {
   const { ping, pushTaunt, reportError } = useStore();
   const [text, setText] = useState('');
@@ -42,7 +46,7 @@ export function TrashTalk({ game, slot, players, onGame, variant }: {
   const [showLines, setShowLines] = useState(false);
   const partner = players[(3 - slot) as Slot];
   const taunts = game.taunts ?? [];
-  const recent = variant === 'dock' ? taunts.slice(-1) : taunts;
+  const recent = variant === 'dock' ? [] : taunts;
   const last = taunts[taunts.length - 1];
   const lastMine = last && last.from === slot ? last : null;
   const logRef = useRef<HTMLDivElement>(null);
@@ -79,6 +83,15 @@ export function TrashTalk({ game, slot, players, onGame, variant }: {
   return (
     <div className={`trash ${variant}`}>
       {variant === 'card' && <p className="eyebrow">Trash talk</p>}
+      {variant === 'sheet' && (
+        <div className="chat-head">
+          <span className="chat-title"><Avatar player={partner} size={22} /> Chat with {partner.name}</span>
+          <button type="button" className="btn text small" onClick={onClose}>Done</button>
+        </div>
+      )}
+      {variant === 'dock' && lastMine && (
+        <span className={`trash-seen${lastMine.seen ? ' yes' : ''}`}>Last message {lastMine.seen ? `seen by ${partner.name} ✓` : 'sent'}</span>
+      )}
       {recent.length > 0 && (
         <div className="trash-log" ref={logRef}>
           {recent.map((t) => (
@@ -92,7 +105,7 @@ export function TrashTalk({ game, slot, players, onGame, variant }: {
           )}
         </div>
       )}
-      {variant === 'card' && recent.length === 0 && <p className="muted small">No trash talk this game. Yet.</p>}
+      {variant !== 'dock' && recent.length === 0 && <p className="muted small">No trash talk this game. Yet.</p>}
       <div className="trash-emojis" role="group" aria-label="Send an emoji">
         {TAUNT_EMOJIS.map((e) => (
           <button key={e} className="trash-emoji" onClick={() => send(e)} disabled={sending} aria-label={`Send ${e}`}>{e}</button>
@@ -118,6 +131,46 @@ export function TrashTalk({ game, slot, players, onGame, variant }: {
   );
 }
 
+/** The small chat box at the top left of the board (v1.7): the latest messages; tap to chat. */
+export function ChatBox({ game, slot, players, onOpen }: {
+  game: GameView;
+  slot: Slot;
+  players: Record<Slot, Player>;
+  onOpen: () => void;
+}) {
+  const partner = players[(3 - slot) as Slot];
+  const taunts = game.taunts ?? [];
+  const last = taunts.slice(-3);
+  const newest = taunts[taunts.length - 1];
+  const [flash, setFlash] = useState(false);
+  const firstId = useRef<number | null>(null);
+  useEffect(() => {
+    if (!newest) return;
+    if (firstId.current === null) { firstId.current = newest.id; return; }
+    if (newest.id === firstId.current || newest.from === slot) return;
+    firstId.current = newest.id;
+    setFlash(true);
+    const t = setTimeout(() => setFlash(false), 2500);
+    return () => clearTimeout(t);
+  }, [newest?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <button className={`chat-box${flash ? ' flash' : ''}`} onClick={onOpen} aria-label={`Chat with ${partner.name}`}>
+      <span className="chat-box-head">💬 Chat</span>
+      {last.length === 0 ? (
+        <span className="chat-box-empty">Tap to say something to {partner.name}</span>
+      ) : (
+        <span className="chat-box-lines">
+          {last.map((t) => (
+            <span key={t.id} className={`chat-line ${t.from === slot ? 'mine' : 'theirs'}`}>
+              <b>{t.from === slot ? 'You' : players[t.from].name}:</b> {t.body}
+            </span>
+          ))}
+        </span>
+      )}
+    </button>
+  );
+}
+
 interface Bubble { id: number; body: string; emoji: boolean; x: number; leaving?: boolean }
 
 /**
@@ -125,7 +178,7 @@ interface Bubble { id: number; body: string; emoji: boolean; x: number; leaving?
  * instance, in App). Never blocks taps or typing. Fed by lib/tauntFeed.
  */
 export function TauntLayer() {
-  const { slot, players, ping } = useStore();
+  const { slot, players, ping, toast } = useStore();
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
   const layer = useRef<HTMLDivElement>(null);
   // Never lower than the bottom of the board's first row (on the game screen).
@@ -139,11 +192,20 @@ export function TauntLayer() {
   const partner = slot ? players[(3 - slot) as Slot] : null;
   const slotRef = useRef(slot);
   slotRef.current = slot;
+  const playersRef = useRef(players);
+  playersRef.current = players;
 
   useEffect(
     () =>
-      onNewTaunts((gameId, fresh) => {
+      onNewTaunts((gameId, all) => {
         navigator.vibrate?.(25);
+        // v1.7: text lives in the chat box on the game screen; elsewhere, a quiet note.
+        const onGame = location.hash.startsWith('#/game');
+        const texts = all.filter((t) => !isEmojiOnly(t.body));
+        const p = slotRef.current ? playersRef.current[(3 - slotRef.current) as Slot] : null;
+        if (!onGame && p) for (const t of texts.slice(-1)) toast(`💬 ${p.name}: ${t.body}`, 'info', { label: 'Open', run: () => go('/game') });
+        const fresh = all.filter((t) => isEmojiOnly(t.body));
+        if (!fresh.length) return;
         const add = fresh.map((t, i) => ({ id: t.id, body: t.body, emoji: isEmojiOnly(t.body), x: Math.round(Math.random() * 50 - 25) + i * 4 }));
         // At most two at a time, and never lower than the board's first row.
         setBubbles((b) => [...b.filter((x) => !add.some((a) => a.id === x.id)), ...add].slice(-2));
@@ -160,7 +222,7 @@ export function TauntLayer() {
             .catch(() => {});
         }
       }),
-    [ping],
+    [ping, toast],
   );
 
   if (!bubbles.length || !partner) return null;
