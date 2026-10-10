@@ -156,7 +156,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     try {
       const s = await api.getGameState(slot);
       setActive(s.game);
-      if (s.game) feedTaunts(s.game.id, s.game.taunts, slot);
+      if (s.game) feedTaunts(s.game.id, [...(s.game.taunts ?? []), ...(s.game.booms ?? [])], slot);
       setOnline(true);
     } catch (e) {
       if (e instanceof ApiError && e.network) setOnline(false);

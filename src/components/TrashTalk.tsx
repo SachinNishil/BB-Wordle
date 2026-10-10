@@ -6,7 +6,6 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { api } from '../lib/api';
 import { feedTaunts, onNewTaunts } from '../lib/tauntFeed';
 import type { GameView, Player, Slot } from '../lib/types';
-import { go } from '../router';
 import { useStore } from '../store';
 import { Avatar } from './Avatar';
 import { Icon } from './Icon';
@@ -157,7 +156,7 @@ export function TrashTalk({ game, slot, players, onGame, variant, onClose }: {
   const [showLines, setShowLines] = useState(false);
   const partner = players[(3 - slot) as Slot];
   const taunts = game.taunts ?? [];
-  const recent = variant === 'dock' ? [] : taunts;
+  const recent = variant === 'dock' ? taunts.slice(-1) : taunts;
   const last = taunts[taunts.length - 1];
   const lastMine = last && last.from === slot ? last : null;
   const logRef = useRef<HTMLDivElement>(null);
@@ -200,9 +199,6 @@ export function TrashTalk({ game, slot, players, onGame, variant, onClose }: {
           <button type="button" className="btn text small" onClick={onClose}>Done</button>
         </div>
       )}
-      {variant === 'dock' && lastMine && (
-        <span className={`trash-seen${lastMine.seen ? ' yes' : ''}`}>Last message {lastMine.seen ? `seen by ${partner.name} ✓` : 'sent'}</span>
-      )}
       {recent.length > 0 && (
         <div className="trash-log" ref={logRef}>
           {recent.map((t) => (
@@ -229,7 +225,7 @@ export function TrashTalk({ game, slot, players, onGame, variant, onClose }: {
           ))}
         </div>
       )}
-      {variant !== 'dock' && <form className="trash-compose" onSubmit={(e) => { e.preventDefault(); void send(text); }}>
+      {<form className="trash-compose" onSubmit={(e) => { e.preventDefault(); void send(text); }}>
         <button type="button" className={`trash-more${showLines ? ' on' : ''}`} onClick={() => setShowLines((x) => !x)}
           aria-label="Quick lines" aria-expanded={showLines}>💬</button>
         <input className="text-input trash-input" value={text} maxLength={TAUNT_MAX} onChange={(e) => setText(e.target.value)}
@@ -289,7 +285,7 @@ interface Bubble { id: number; body: string; emoji: boolean; x: number; leaving?
  * instance, in App). Never blocks taps or typing. Fed by lib/tauntFeed.
  */
 export function TauntLayer() {
-  const { slot, players, ping, toast } = useStore();
+  const { slot, players, ping } = useStore();
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
   const layer = useRef<HTMLDivElement>(null);
   // Never lower than the bottom of the board's first row (on the game screen).
@@ -303,37 +299,45 @@ export function TauntLayer() {
   const partner = slot ? players[(3 - slot) as Slot] : null;
   const slotRef = useRef(slot);
   slotRef.current = slot;
-  const playersRef = useRef(players);
-  playersRef.current = players;
 
   useEffect(
     () =>
       onNewTaunts((gameId, all) => {
-        navigator.vibrate?.(25);
-        // v1.7: text lives in the chat box on the game screen; elsewhere, a quiet note.
-        const onGame = location.hash.startsWith('#/game');
-        const texts = all.filter((t) => !isEmojiOnly(t.body));
-        const p = slotRef.current ? playersRef.current[(3 - slotRef.current) as Slot] : null;
-        if (!onGame && p) for (const t of texts.slice(-1)) toast(`💬 ${p.name}: ${t.body}`, 'info', { label: 'Open', run: () => go('/game') });
-        const fresh = all.filter((t) => isEmojiOnly(t.body));
-        if (!fresh.length) return;
-        const add = fresh.map((t, i) => ({ id: t.id, body: t.body, emoji: isEmojiOnly(t.body), x: Math.round(Math.random() * 50 - 25) + i * 4 }));
-        // At most two at a time, and never lower than the board's first row.
-        setBubbles((b) => [...b.filter((x) => !add.some((a) => a.id === x.id)), ...add].slice(-2));
+        // v1.9: soundboard booms make the screen jump (and vibrate where the phone allows it).
+        const booms = all.filter((t) => t.kind === 'boom');
+        const chats = all.filter((t) => t.kind !== 'boom');
+        if (booms.length) {
+          navigator.vibrate?.([40, 30, 40]);
+          const root = document.documentElement;
+          root.classList.remove('boom-shake');
+          void root.offsetWidth; // restart the animation on every boom
+          root.classList.add('boom-shake');
+          setTimeout(() => root.classList.remove('boom-shake'), 450);
+        } else {
+          navigator.vibrate?.(25);
+        }
+        const add = all.map((t, i) => ({ id: t.id, body: t.body, emoji: isEmojiOnly(t.body), x: Math.round(Math.random() * 60 - 30) + i * 4 }));
+        // At most two messages and four emojis at a time, never lower than the board's first row.
+        setBubbles((b) => {
+          const next = [...b.filter((x) => !add.some((a) => a.id === x.id)), ...add];
+          const texts = next.filter((x) => !x.emoji).slice(-2);
+          const emojis = next.filter((x) => x.emoji).slice(-4);
+          return next.filter((x) => texts.includes(x) || emojis.includes(x));
+        });
         for (const a of add) {
-          const life = a.emoji ? 2800 : 4800;
+          const life = a.emoji ? 2200 : 4800;
           setTimeout(() => setBubbles((b) => b.map((x) => (x.id === a.id ? { ...x, leaving: true } : x))), life - 400);
           setTimeout(() => setBubbles((b) => b.filter((x) => x.id !== a.id)), life);
         }
-        // Tell the sender it landed ("Seen" under their message).
+        // Tell the sender a message landed ("Seen" under it).
         const s = slotRef.current;
-        if (s && document.visibilityState === 'visible') {
-          api.markTauntsSeen(s, gameId, Math.max(...fresh.map((t) => t.id)))
+        if (s && chats.length && document.visibilityState === 'visible') {
+          api.markTauntsSeen(s, gameId, Math.max(...chats.map((t) => t.id)))
             .then(() => ping('game', 'seen'))
             .catch(() => {});
         }
       }),
-    [ping, toast],
+    [ping],
   );
 
   if (!bubbles.length || !partner) return null;
@@ -357,8 +361,44 @@ export function TauntLayer() {
 
 /** Lets a screen hand its latest copy of the game's trash talk to the feed. */
 export function useFeedTaunts(game: GameView | null, slot: Slot | null) {
-  const ids = (game?.taunts ?? []).map((t) => t.id).join(',');
+  const all = [...(game?.taunts ?? []), ...(game?.booms ?? [])];
+  const ids = all.map((t) => t.id).join(',');
   useEffect(() => {
-    if (game) feedTaunts(game.id, game.taunts, slot);
+    if (game) feedTaunts(game.id, all, slot);
   }, [game?.id, ids, slot]); // eslint-disable-line react-hooks/exhaustive-deps
+}
+
+export const SOUNDBOARD = ['😂', '🔥', '💀', '🐢', '😏', '👀', '🤡', '😱', '💩', '😘'];
+
+/**
+ * The soundboard (v1.9) above the board while you're still playing: tap an emoji
+ * as often as you like; each one bursts over your partner's board and makes
+ * their screen jump. No messages here; those open up once you've finished.
+ */
+export function Soundboard({ game, slot }: { game: GameView; slot: Slot }) {
+  const { pushTaunt } = useStore();
+  const [pops, setPops] = useState<{ id: number; e: string }[]>([]);
+  const n = useRef(0);
+  function boom(e: string) {
+    navigator.vibrate?.(8);
+    const id = ++n.current;
+    setPops((p) => [...p.slice(-5), { id, e }]);
+    setTimeout(() => setPops((p) => p.filter((x) => x.id !== id)), 700);
+    api.sendTaunt(slot, game.id, e, 'boom')
+      .then((r) => {
+        const mine = [...(r.game?.booms ?? [])].reverse().find((t) => t.from === slot && t.body === e);
+        if (mine) pushTaunt(game.id, { ...mine, kind: 'boom' });
+      })
+      .catch(() => { /* too fast or offline: a lost boom doesn't matter */ });
+  }
+  return (
+    <div className="soundboard" role="group" aria-label="Soundboard">
+      {SOUNDBOARD.map((e) => (
+        <button key={e} className="sb-key" onClick={() => boom(e)} aria-label={`Boom ${e}`}>
+          {e}
+          {pops.filter((p) => p.e === e).map((p) => <span key={p.id} className="sb-pop" aria-hidden="true">{e}</span>)}
+        </button>
+      ))}
+    </div>
+  );
 }

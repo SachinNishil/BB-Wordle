@@ -196,12 +196,19 @@ function Couple({ me, partner }: { me: Player; partner: Player }) {
 
   const side = (p: Player, mine: boolean) => (
     <div className={`couple-side${mine ? ' mine' : ''}`}>
-      {p.status_text && (
-        <p className={`speech ${mine ? 'left' : 'right'}`} key={p.status_at ?? ''}>
+      {p.status_text && (mine ? (
+        // Your own bubble: tap it to edit (v1.9).
+        <button className="speech left speech-edit" key={p.status_at ?? ''} onClick={() => { setText(me.status_text ?? ''); setOpen(true); }}
+          aria-label="Edit your message">
+          <span className="speech-text">{p.status_text}</span>
+          <span className="speech-time">{p.status_at ? ago(p.status_at) : ''} · tap to edit</span>
+        </button>
+      ) : (
+        <p className="speech right" key={p.status_at ?? ''}>
           <span className="speech-text">{p.status_text}</span>
           {p.status_at && <span className="speech-time">{ago(p.status_at)}</span>}
         </p>
-      )}
+      ))}
       {mine ? (
         <button className="avatar-btn couple-me" onClick={() => { setText(me.status_text ?? ''); setOpen(true); }}
           aria-label="Say something to your partner">
@@ -229,7 +236,7 @@ function Couple({ me, partner }: { me: Player; partner: Player }) {
         <div className="modal-backdrop" onClick={() => setOpen(false)}>
           <form className="modal" role="dialog" aria-modal="true" aria-label={`Say something to ${partner.name}`}
             onClick={(e) => e.stopPropagation()} onSubmit={(e) => { e.preventDefault(); void save(text); }}>
-            <h3>Say something to {partner.name}</h3>
+            <h3>{me.status_text ? 'Edit your message' : `Say something to ${partner.name}`}</h3>
             <p className="muted small">It shows as a speech bubble from your photo on {partner.name}'s home screen, for a day.</p>
             <input className="text-input" value={text} maxLength={STATUS_MAX} autoFocus onChange={(e) => setText(e.target.value)}
               placeholder="Rematch tonight? 😏" aria-label="Your message" enterKeyHint="send" />
@@ -238,7 +245,7 @@ function Couple({ me, partner }: { me: Player; partner: Player }) {
             </div>
             <div className="modal-actions">
               {me.status_text && <button type="button" className="btn ghost" onClick={() => save('')} disabled={busy}>Clear</button>}
-              <button type="submit" className="btn primary" disabled={busy || !text.trim()}>Post</button>
+              <button type="submit" className="btn primary" disabled={busy || !text.trim()}>{me.status_text ? 'Update' : 'Post'}</button>
             </div>
           </form>
         </div>

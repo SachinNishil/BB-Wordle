@@ -72,6 +72,8 @@ export interface Taunt {
   at: string;
   /** Has the partner's phone shown it? (v1.6.1) */
   seen?: boolean;
+  /** v1.9: 'boom' = soundboard emoji (not part of the chat log). */
+  kind?: 'chat' | 'boom';
 }
 
 export type GameMode = 'classic' | 'challenge';
@@ -101,6 +103,8 @@ export interface GameView {
   partner: PartnerView;
   /** Trash talk in this game, oldest first (last 40). Missing on older servers. */
   taunts?: Taunt[];
+  /** Soundboard emojis from the last minute (v1.9). */
+  booms?: Taunt[];
 }
 
 export interface GameState {

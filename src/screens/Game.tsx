@@ -4,10 +4,10 @@ import { Board, REVEAL_MS } from '../components/Board';
 import { Countdown } from '../components/Countdown';
 import { Icon } from '../components/Icon';
 import { Keyboard } from '../components/Keyboard';
-import { Elapsed, PartnerMini } from '../components/Live';
+import { Elapsed, PartnerMini, SideCard } from '../components/Live';
 import { fromGameView, ResultsView } from '../components/Results';
 import { WordTiles } from '../components/Tiles';
-import { ChatBox, ChatPanel, TAUNT_MAX, TrashTalk, chatCase, useFeedTaunts, useSendTaunt } from '../components/TrashTalk';
+import { Soundboard, TrashTalk, useFeedTaunts } from '../components/TrashTalk';
 import { api, ApiError } from '../lib/api';
 import { serverNow } from '../lib/clock';
 import { loadDictionary } from '../lib/dictionary';
@@ -36,10 +36,6 @@ export function GameScreen({ id }: { id?: string }) {
   const store = useStore();
   const { slot, players, active, activeLoaded, pulse, ping, toast, reportError, setActive, sendTyping, partnerTyping, setQuietInvites } = store;
   const [rematching, setRematching] = useState(false);
-  const [chatOpen, setChatOpen] = useState(false);
-  const [chatText, setChatText] = useState('');
-  const chatOpenRef = useRef(false);
-  chatOpenRef.current = chatOpen;
   const [gameId, setGameId] = useState<string | null>(id ?? null);
   const [game, setGame] = useState<GameView | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -350,29 +346,8 @@ export function GameScreen({ id }: { id?: string }) {
     }
   }
 
-  const { send: sendTaunt } = useSendTaunt(game, slot, apply);
-  useEffect(() => {
-    if (phase === 'results') setChatOpen(false);
-  }, [phase]);
-  // v1.8.1: while the chat is open, the Wordle keyboard types the message.
-  const onChatKey = useCallback(
-    (k: string) => {
-      if (k === 'Escape') return setChatOpen(false);
-      if (k === 'Enter') {
-        const body = chatCase(chatText);
-        if (body.trim()) void sendTaunt(body).then((ok) => ok && setChatText(''));
-        return;
-      }
-      if (k === 'Backspace') return setChatText((t) => t.slice(0, -1));
-      if (k === ' ') return setChatText((t) => (t && !t.endsWith(' ') && t.length < TAUNT_MAX ? t + ' ' : t));
-      if ([...k].length === 1 || /\p{Extended_Pictographic}/u.test(k)) setChatText((t) => (t.length + k.length <= TAUNT_MAX ? t + k : t));
-    },
-    [chatText, sendTaunt],
-  );
-
   const onKey = useCallback(
     (k: string) => {
-      if (chatOpen) return onChatKey(k);
       if (picking && !submitting) {
         if (k === 'Enter') void submitPick();
         else if (k === 'Backspace') setPick((t) => t.slice(0, -1));
@@ -384,7 +359,7 @@ export function GameScreen({ id }: { id?: string }) {
       else if (k === 'Backspace') setTyped((t) => t.slice(0, -1));
       else if (/^[a-z]$/i.test(k)) setTyped((t) => (t.length < 5 ? t + k.toUpperCase() : t));
     },
-    [phase, submitting, revealing, submit, picking, submitPick, chatOpen, onChatKey],
+    [phase, submitting, revealing, submit, picking, submitPick],
   );
 
   // Physical keyboard.
@@ -398,8 +373,7 @@ export function GameScreen({ id }: { id?: string }) {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
-      const chatting = chatOpenRef.current && (e.key.length === 1 || e.key === 'Escape');
-      if (chatting || e.key === 'Enter' || e.key === 'Backspace' || /^[a-z]$/i.test(e.key)) {
+      if (e.key === 'Enter' || e.key === 'Backspace' || /^[a-z]$/i.test(e.key)) {
         e.preventDefault();
         keyRef.current(e.key);
       }
@@ -619,13 +593,7 @@ export function GameScreen({ id }: { id?: string }) {
 
   if (!game) return null;
 
-  // The chat (v1.8.1) takes the board's place and uses the Wordle keyboard, so nothing overlaps.
-  const closeChat = () => setChatOpen(false);
-  const chatPanel = chatOpen && slot ? (
-    <ChatPanel game={game} slot={slot} players={players} draft={chatText}
-      sendNow={sendTaunt} onSent={() => setChatText('')} onClose={closeChat} />
-  ) : null;
-  const chatKeyboard = <Keyboard states={{}} onKey={onKey} chat />;
+
 
   if (finishedNow && watch && slot) {
     const theirs = watch === 'partner';
@@ -642,16 +610,27 @@ export function GameScreen({ id }: { id?: string }) {
       <div className="screen game spectate">
         <header className="topbar">
           <button className="iconbtn" onClick={() => back('/')} aria-label="Back"><Icon name="back" /></button>
-          <h1 className="topbar-title">👀 Watching {partner.name}</h1>
+          <h1 className="topbar-title">
+            👀 Watching {partner.name}
+            {/* v1.9: their clock, ticking live, while you watch. */}
+            {game.partner.started_at && (
+              <span className="topbar-clock spectate-clock" aria-label={`${partner.name}'s time`}>
+                {' '}· <Elapsed startedAt={game.partner.started_at} durationMs={game.partner.duration_ms} />
+              </span>
+            )}
+          </h1>
           <div className="topbar-right" />
         </header>
-        {!chatPanel && <div className="vs-strip chat-strip">
-          <ChatBox game={game} slot={slot} players={players} onOpen={() => setChatOpen(true)} />
-          <PartnerMini player={partner}
-            patterns={partnerReveal !== null && theirs ? game.partner.patterns.slice(0, partnerReveal) : game.partner.patterns}
-            status={partnerReveal !== null && theirs ? 'playing' : game.partner.status} />
-        </div>}
-        {chatPanel ? <>{chatPanel}{chatKeyboard}</> : <>
+        {/* v1.9: spectating is back to the score cards, with the full chat dock at the bottom. */}
+        <div className="vs-strip">
+          <SideCard player={me} view={game.me} isMe align="left" />
+          <span className="vs-chip">VS</span>
+          <SideCard player={partner} isMe={false} align="right"
+            view={partnerReveal !== null && theirs
+              ? { ...game.partner, patterns: game.partner.patterns.slice(0, partnerReveal), guess_count: partnerReveal, status: 'playing', duration_ms: null, gave_up: false }
+              : game.partner} />
+        </div>
+        <>
         <div className="segmented small spectate-tabs" role="tablist">
           <button role="tab" aria-selected={theirs} className={theirs ? 'on' : ''} onClick={() => setWatch('partner')}>{partner.name}'s board</button>
           <button role="tab" aria-selected={!theirs} className={!theirs ? 'on' : ''} onClick={() => setWatch('mine')}>Your board</button>
@@ -678,7 +657,7 @@ export function GameScreen({ id }: { id?: string }) {
           <Board key="mine" guesses={game.me.guesses} current="" revealRow={null} shake={false} bounceRow={null} active={false} />
         )}
         <TrashTalk game={game} slot={slot} players={players} onGame={apply} variant="dock" />
-        </>}
+        </>
       </div>
     );
   }
@@ -703,11 +682,12 @@ export function GameScreen({ id }: { id?: string }) {
       </header>
 
       {/* v1.7 experiment: chat on the left (my own card just repeated my board), partner on the right. */}
-      {!chatPanel && <div className="vs-strip chat-strip">
-        {slot && <ChatBox game={game} slot={slot} players={players} onOpen={() => setChatOpen(true)} />}
+      {/* v1.9: while you're playing, the box above the board is an emoji soundboard. */}
+      <div className="vs-strip chat-strip">
+        {slot && <Soundboard game={game} slot={slot} />}
         <PartnerMini player={partner} patterns={game.partner.patterns} status={game.partner.status} />
-      </div>}
-      {chatPanel ? <>{chatPanel}{chatKeyboard}</> : <>
+      </div>
+      <>
       {game.partner.status === 'solved' && game.me.status !== 'solved' && game.me.status !== 'failed' && (
         <p className="partner-news">{game.mode === 'challenge' ? `🏆 ${partner.name} has solved the word you picked.` : "🏆 Your partner has solved today's word."}</p>
       )}
@@ -740,7 +720,7 @@ export function GameScreen({ id }: { id?: string }) {
       ) : (
         <Keyboard states={keyStates} onKey={onKey} disabled={phase !== 'playing' || submitting} />
       )}
-      </>}
+      </>
 
       {phase === 'countdown' && cdTarget && (
         <Countdown target={cdTarget} onGo={begin}

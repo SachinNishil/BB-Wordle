@@ -797,6 +797,27 @@ textarea { resize: vertical; min-height: 120px; font-family: ui-monospace, SFMon
 .solo .board-wrap { padding-top: 14px; }
 .solo-done .finished-head { align-items: center; }
 
+/* --------------------------------------------------------------- soundboard (v1.9) */
+.soundboard {
+  min-width: 0; background: var(--surface); border-radius: 16px; box-shadow: var(--shadow); padding: 6px;
+  display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; align-content: center;
+}
+.sb-key {
+  position: relative; border: 0; background: var(--surface-2); border-radius: 12px; height: 44px; font-size: 1.5rem; line-height: 1;
+  display: grid; place-items: center; touch-action: manipulation; transition: transform 70ms ease;
+}
+.sb-key:active { transform: scale(0.88); background: var(--surface-3); }
+.sb-pop { position: absolute; left: 50%; top: 0; pointer-events: none; font-size: 1.4rem; animation: sb-pop 700ms ease-out forwards; }
+@keyframes sb-pop { from { transform: translate(-50%, 0) scale(1); opacity: 1; } to { transform: translate(-50%, -46px) scale(1.4); opacity: 0; } }
+html.boom-shake .screen { animation: boom-shake 380ms cubic-bezier(.36, .07, .19, .97); }
+@keyframes boom-shake {
+  10%, 90% { transform: translate3d(-1px, 0, 0); }
+  20%, 80% { transform: translate3d(3px, 0, 0); }
+  30%, 50%, 70% { transform: translate3d(-5px, 1px, 0); }
+  40%, 60% { transform: translate3d(5px, -1px, 0); }
+}
+@media (max-height: 700px) { .sb-key { height: 38px; font-size: 1.3rem; } }
+
 /* --------------------------------------------------------------- share image */
 .results-actions.three { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .results-actions.three .btn { flex-direction: column; gap: 4px; min-height: 64px; padding: 8px 4px; border-radius: 16px; font-size: 0.8rem; line-height: 1.15; }
@@ -829,6 +850,7 @@ textarea { resize: vertical; min-height: 120px; font-family: ui-monospace, SFMon
   content: ''; position: absolute; top: 100%; left: 50%; margin-left: -8px; width: 0; height: 0;
   border: 8px solid transparent; border-top-color: var(--surface);
 }
+.speech-edit { border: 0; color: inherit; font: inherit; font-size: 0.86rem; font-weight: 600; }
 .speech-time { font-size: 0.68rem; font-weight: 600; color: var(--ink-3); }
 .trash-lines.wrap { flex-wrap: wrap; overflow: visible; }
 

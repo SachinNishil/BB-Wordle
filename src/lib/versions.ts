@@ -9,6 +9,16 @@ export interface Release {
 
 export const VERSIONS: Release[] = [
   {
+    version: '1.9.0',
+    date: '2026-10-10',
+    changes: [
+      'While you\'re both still playing, the box above the board is now an emoji soundboard: tap away as often as you like. Each one bursts over your partner\'s board and makes their screen jump (and buzz, on phones that allow it).',
+      'Messages are back to spectator mode: once you\'ve finished, type messages or send emojis from the bar at the bottom, and they pop up at the top of your partner\'s screen.',
+      'While spectating, your partner\'s clock ticks live at the top, next to "Watching".',
+      'Your speech bubble on the home screen can now be edited: tap the bubble (or your photo), change it and press Update.',
+    ],
+  },
+  {
     version: '1.8.1',
     date: '2026-10-10',
     changes: [

@@ -33,7 +33,8 @@ export function feedTaunts(gameId: string | undefined, taunts: Taunt[] | undefin
     seen.add(t.id);
     changed = true;
     const at = Date.parse(t.at);
-    if (t.from !== me && (!Number.isFinite(at) || serverNow() - at < RECENT_MS)) fresh.push(t);
+    const window = t.kind === 'boom' ? 15000 : RECENT_MS; // late soundboard emojis aren't worth replaying
+    if (t.from !== me && (!Number.isFinite(at) || serverNow() - at < window)) fresh.push(t);
   }
   if (!changed) return;
   // Keep the record small: the last 60 ids of the last 6 games.
@@ -43,5 +44,5 @@ export function feedTaunts(gameId: string | undefined, taunts: Taunt[] | undefin
   }
   shown = next;
   save(KEY, shown);
-  if (fresh.length) for (const l of listeners) l(gameId, fresh.slice(-3));
+  if (fresh.length) for (const l of listeners) l(gameId, fresh.slice(-4));
 }
