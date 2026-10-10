@@ -1,6 +1,6 @@
 import { syncClock } from './clock';
 import { supabase } from './supabase';
-import type { GameMode, GameState, GuessResult, HistoryGame, Room, Slot, WordSettingsInfo } from './types';
+import type { GameMode, GameState, GuessResult, HistoryGame, Room, Slot, SoloState, SoloStats, SoloView, WordSettingsInfo } from './types';
 
 /** An error from the server, with a code from supabase/schema.sql (e.g. "not_a_word"). */
 export class ApiError extends Error {
@@ -38,6 +38,7 @@ const FRIENDLY: Record<string, string> = {
   dictionary_outdated: 'The word list needs updating. Run the new dictionary.sql in Supabase.',
   bad_status: 'Keep it to 80 characters.',
 };
+type SoloOne = { server_now: string; solo: SoloView };
 
 export function friendlyError(e: unknown): string {
   if (e instanceof ApiError) {
@@ -100,4 +101,16 @@ export const api = {
   giveUp: (slot: Slot, gameId: string) => call<GameState>('give_up', { ...K, p_slot: slot, p_game_id: gameId }),
   cancelGame: (slot: Slot, gameId: string) => call<boolean>('cancel_game', { ...K, p_slot: slot, p_game_id: gameId }),
   getHistory: (limit: number | null = null) => call<HistoryGame[]>('get_history', { ...K, p_limit: limit }),
+
+  // Solo (v1.10)
+  soloStart: (slot: Slot) => call<SoloOne>('solo_start', { ...K, p_slot: slot }),
+  soloGuess: (slot: Slot, id: string, guess: string, attempt: number) =>
+    call<SoloOne & { pattern: string }>('solo_guess', { ...K, p_slot: slot, p_id: id, p_guess: guess, p_attempt: attempt }),
+  soloGiveUp: (slot: Slot, id: string) => call<SoloOne>('solo_give_up', { ...K, p_slot: slot, p_id: id }),
+  soloDraft: (slot: Slot, id: string, text: string) => call<boolean>('solo_draft', { ...K, p_slot: slot, p_id: id, p_text: text }),
+  soloState: (slot: Slot, id: string | null = null) => call<SoloState>('solo_state', { ...K, p_slot: slot, p_id: id }),
+  soloTaunt: (slot: Slot, id: string, body: string, kind: 'chat' | 'boom' = 'chat') =>
+    call<SoloOne>('solo_taunt', { ...K, p_slot: slot, p_id: id, p_body: body, p_kind: kind }),
+  soloStats: () => call<SoloStats[]>('solo_stats', K),
+  seen: (slot: Slot) => call<boolean>('seen', { ...K, p_slot: slot }),
 };

@@ -873,6 +873,26 @@ html.boom-shake .screen { animation: boom-shake 380ms cubic-bezier(.36, .07, .19
 .word-option:has(input:focus-visible) { outline: 2px solid var(--p1); outline-offset: 2px; }
 .word-pool { font-size: 0.9rem; margin-top: 4px; }
 
+/* --------------------------------------------------------------- solo with a clock, watching, last seen (v1.10) */
+.last-seen { font-size: 0.72rem; font-weight: 600; color: var(--ink-3); margin-top: -6px; white-space: nowrap; }
+.solo-live {
+  flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px;
+  box-shadow: var(--shadow), inset 0 0 0 2px color-mix(in srgb, var(--p2) 35%, transparent);
+}
+.solo-live-main { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.solo-live .eyebrow { margin: 0; justify-content: flex-start; }
+.solo-live-line { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ink-2); font-size: 0.9rem; }
+.solo-live .btn { flex: none; }
+.vs-strip.chat-strip.solo-strip { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+.solo-strip .soundboard { grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 3px; padding: 5px; }
+.solo-strip .sb-key { height: 38px; font-size: 1.2rem; border-radius: 10px; }
+.watching-chip { justify-self: center; font-size: 0.8rem; font-weight: 700; color: var(--ink-2); }
+.solo-loading { flex: 1; display: grid; place-items: center; }
+.solo-watch-done { flex: none; display: flex; gap: 8px; justify-content: center; margin-top: 8px; }
+.solo-watch-done .btn { flex: 1; max-width: 220px; }
+.solo-done .trash.dock { box-shadow: none; padding: 0; animation: none; }
+.solo-stats .eyebrow { margin-bottom: 4px; }
+
 /* --------------------------------------------------------------- desktop */
 @media (min-width: 700px) {
   .screen { padding-top: calc(var(--safe-top) + 18px); }

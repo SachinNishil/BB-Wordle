@@ -7,7 +7,7 @@ import { GameWords } from '../components/Tiles';
 import { api } from '../lib/api';
 import { APP_VERSION } from '../lib/versions';
 import { fmtDate, fmtDuration, serverNow } from '../lib/clock';
-import type { GameMode, GameView, HistoryGame, Player, Slot, WordSettings } from '../lib/types';
+import type { GameMode, GameView, HistoryGame, Player, Slot, SoloView, WordSettings } from '../lib/types';
 import { go } from '../router';
 import { useStore } from '../store';
 
@@ -170,10 +170,21 @@ function ago(iso: string) {
   return `${Math.round(m / 60)}h ago`;
 }
 
+/** "Last seen 5m ago" under your partner's photo while they're away (v1.10). */
+export function lastSeenText(at: number) {
+  const m = Math.max(0, Math.round((serverNow() - at) / 60000));
+  if (m < 1) return 'Last seen just now';
+  if (m < 60) return `Last seen ${m}m ago`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `Last seen ${h}h ago`;
+  const d = Math.round(h / 24);
+  return d === 1 ? 'Last seen yesterday' : d < 30 ? `Last seen ${d} days ago` : `Last seen ${fmtDate(new Date(at).toISOString(), { day: 'numeric', month: 'short' })}`;
+}
+
 /** The two of you at the top of Home (v1.6): green dot when your partner has the app open,
  *  speech bubbles from your photos, and tap your own photo to say something. */
 function Couple({ me, partner }: { me: Player; partner: Player }) {
-  const { slot, partnerOnline, setPlayers, ping, reportError, toast } = useStore();
+  const { slot, partnerOnline, partnerLastSeen, setPlayers, ping, reportError, toast } = useStore();
   const [open, setOpen] = useState(false);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
@@ -222,6 +233,7 @@ function Couple({ me, partner }: { me: Player; partner: Player }) {
         </span>
       )}
       <span>{p.name}</span>
+      {!mine && !partnerOnline && partnerLastSeen && <span className="last-seen">{lastSeenText(partnerLastSeen)}</span>}
     </div>
   );
 
@@ -254,9 +266,29 @@ function Couple({ me, partner }: { me: Player; partner: Player }) {
   );
 }
 
+/** Your partner is playing solo (v1.10): watch it live and trash talk them. */
+function PartnerSolo({ game, partner }: { game: SoloView; partner: Player }) {
+  const counting = Date.parse(game.started_at) > serverNow();
+  return (
+    <section className="card solo-live">
+      <div className="solo-live-main">
+        <p className="eyebrow live-eyebrow"><i className="dot" /> {partner.name} is playing solo</p>
+        <p className="solo-live-line">
+          {counting ? 'Just starting…' : <>Guess {Math.min(game.guesses.length + 1, 6)}/6 · <Elapsed startedAt={game.started_at} durationMs={game.duration_ms} /></>}
+        </p>
+      </div>
+      <button className="btn primary" onClick={() => go(`/solo/watch/${game.id}`)}>👀 Watch</button>
+    </section>
+  );
+}
+
 export function Home() {
-  const { me, partner, players, history, online } = useStore();
+  const { me, partner, players, history, online, solo, partnerPresence } = useStore();
   if (!me || !partner) return null;
+  // A partner's solo game is worth watching while they're on it (or touched it lately).
+  const ps = solo.partner;
+  const psActive = ps && (partnerPresence.some((p) => p.screen === 'solo')
+    || serverNow() - Math.max(Date.parse(ps.started_at), ps.draft_at ? Date.parse(ps.draft_at) : 0) < 10 * 60000);
   const recent = (history ?? []).slice(0, 3);
   return (
     <div className="screen scroll home">
@@ -282,8 +314,11 @@ export function Home() {
       <Couple me={me} partner={partner} />
 
       <GameCard />
+      {psActive && ps && <PartnerSolo game={ps} partner={partner} />}
       <button className="solo-link" onClick={() => go('/solo')}>
-        <span>Or play <b>solo</b>, just for fun (no score, nothing shared) ›</span>
+        {solo.mine
+          ? <span>Carry on with your <b>solo</b> game · <Elapsed startedAt={solo.mine.started_at} durationMs={null} /> ›</span>
+          : <span>Or play <b>solo</b>, on your own (it has its own stats) ›</span>}
       </button>
 
       <InstallHint />

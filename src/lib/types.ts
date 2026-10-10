@@ -7,6 +7,8 @@ export interface Player {
   /** Speech bubble on the home screen (v1.6); null after a day or when cleared. */
   status_text?: string | null;
   status_at?: string | null;
+  /** When their app was last open (v1.10), for "last seen" on Home. */
+  last_seen_at?: string | null;
 }
 
 /** Settings › Classic words (v1.6), shared by both phones. */
@@ -162,4 +164,43 @@ export interface AddWordsResult {
   duplicates: { word: string; added_by: Slot | null; reason: 'repeated_in_list' | 'already_in_repository' }[];
   invalid: string[];
   unknown: string[];
+}
+
+/** A solo game (v1.10): kept on the server so it has a clock, its own stats and can be watched. */
+export interface SoloView {
+  id: string;
+  slot: Slot;
+  status: 'playing' | 'solved' | 'failed';
+  gave_up: boolean;
+  /** The "GO!" moment; in the future during the 3, 2, 1. */
+  started_at: string;
+  finished_at: string | null;
+  duration_ms: number | null;
+  guesses: GuessRow[];
+  /** Hidden from the player until the game is over; the watcher always has it. */
+  word: string | null;
+  /** What the player is typing (watchers only). */
+  draft?: string | null;
+  draft_at?: string | null;
+  taunts?: Taunt[];
+  booms?: Taunt[];
+}
+
+export interface SoloState {
+  server_now: string;
+  mine: SoloView | null;
+  partner: SoloView | null;
+  solo: SoloView | null;
+}
+
+export interface SoloStats {
+  slot: Slot;
+  played: number;
+  solved: number;
+  avg_guesses: number | string | null;
+  best_ms: number | null;
+  avg_ms: number | string | null;
+  /** Solved in 1..6 guesses. */
+  dist: number[];
+  streak: number;
 }

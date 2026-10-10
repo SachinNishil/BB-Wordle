@@ -4,7 +4,7 @@ import { deviceId, getSlot, setSlot as saveSlot, stripLegacyInvite } from './lib
 import { RoomChannel, type ChangeKind, type PresenceInfo, type Screen, type TypingInfo } from './lib/realtime';
 import { feedTaunts } from './lib/tauntFeed';
 import { serverNow } from './lib/clock';
-import type { GameView, HistoryGame, Player, Slot, Taunt, WordSettings } from './lib/types';
+import type { GameView, HistoryGame, Player, Slot, SoloState, SoloView, Taunt, WordSettings } from './lib/types';
 import { load, save } from './lib/storage';
 import { APP_VERSION } from './lib/versions';
 import { go, useRoute } from './router';
@@ -39,6 +39,12 @@ interface Store {
   toasts: Toast[];
   /** What my partner is typing right now (spectator mode, v1.5). */
   partnerTyping: (TypingInfo & { at: number }) | null;
+  /** Live solo games (v1.10): mine (to resume) and my partner's (to watch). */
+  solo: { mine: SoloView | null; partner: SoloView | null };
+  setSoloState: (s: SoloState) => void;
+  refreshSolo: () => Promise<void>;
+  /** When my partner last had the app open (ms, server time), for "last seen" (v1.10). */
+  partnerLastSeen: number | null;
 
   chooseSlot: (s: Slot) => void;
   setPlayers: (p: Player[]) => void;
@@ -69,8 +75,9 @@ const DEFAULT_PLAYERS: Record<Slot, Player> = {
 };
 
 function screenFor(path: string): Screen {
+  if (path.startsWith('/solo/watch')) return 'watch';
   const first = path.split('/')[1] || 'home';
-  return (['home', 'game', 'stats', 'history', 'settings'] as Screen[]).includes(first as Screen) ? (first as Screen) : 'other';
+  return (['home', 'game', 'stats', 'history', 'settings', 'solo'] as Screen[]).includes(first as Screen) ? (first as Screen) : 'other';
 }
 
 export function StoreProvider({ children }: { children: ReactNode }) {
@@ -93,6 +100,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const setQuietInvites = useCallback((q: boolean) => { quietInvites.current = q; }, []);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [partnerTyping, setPartnerTyping] = useState<Store['partnerTyping']>(null);
+  const [solo, setSolo] = useState<Store['solo']>({ mine: null, partner: null });
+  const presenceSeen = useRef(0);
   // Bumped to rebuild the live channel after the app comes back from the background.
   const [channelGen, setChannelGen] = useState(0);
   const channel = useRef<RoomChannel | null>(null);
@@ -163,6 +172,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   }, [slot, setActive]);
 
+  const setSoloState = useCallback((st: SoloState) => {
+    setSolo((cur) => {
+      const same = (a: SoloView | null, b: SoloView | null) => JSON.stringify(a) === JSON.stringify(b);
+      return same(cur.mine, st.mine) && same(cur.partner, st.partner) ? cur : { mine: st.mine, partner: st.partner };
+    });
+    for (const x of [st.mine, st.partner]) if (x) feedTaunts(x.id, [...(x.taunts ?? []), ...(x.booms ?? [])], slot);
+  }, [slot]);
+
+  const refreshSolo = useCallback(async () => {
+    if (!slot) return;
+    try {
+      setSoloState(await api.soloState(slot));
+    } catch {
+      /* older database or offline: no solo news */
+    }
+  }, [slot, setSoloState]);
+
   // When the active game disappears it has completed: history changed.
   useEffect(() => {
     const before = prevActive.current;
@@ -198,6 +224,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void refreshActive();
   }, [refreshActive]);
+  useEffect(() => {
+    void refreshSolo();
+  }, [refreshSolo]);
 
   // Realtime channel for this room.
   const namesRef = useRef(players);
@@ -211,6 +240,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           if (p.kind === 'game') {
             setPulse((x) => x + 1);
             void refreshActive();
+            if (p.what?.startsWith('solo') || p.what === 'seen') void refreshSolo();
             if ((p.what === 'started' || p.what === 'challenged') && p.slot && p.slot !== slot && !quietInvites.current) {
               navigator.vibrate?.([30, 60, 30]);
               const from = namesRef.current[p.slot].name;
@@ -254,7 +284,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       channel.current = null;
       setRealtime(false);
     };
-  }, [slot, refreshActive, refreshRoom, refreshHistory, toast, channelGen]);
+  }, [slot, refreshActive, refreshRoom, refreshHistory, refreshSolo, toast, channelGen]);
 
   // Tell the partner which screen we're on.
   const screen = screenFor(route.path);
@@ -276,9 +306,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (document.visibilityState !== 'visible') return;
       setPulse((x) => x + 1);
       void refreshActive();
+      // The solo screens fetch their own game; everywhere else, check for solo news.
+      if (screen !== 'solo' && screen !== 'watch') void refreshSolo();
     }, ms);
     return () => clearInterval(t);
-  }, [slot, realtime, screen, refreshActive, active?.me.status, active?.partner.status]); // eslint-disable-line
+  }, [slot, realtime, screen, refreshActive, refreshSolo, active?.me.status, active?.partner.status]); // eslint-disable-line
 
   // Coming back to the app or back online: refresh everything.
   useEffect(() => {
@@ -297,6 +329,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setPulse((x) => x + 1);
       void refreshActive();
       void refreshRoom();
+      void refreshSolo();
     };
     const up = () => {
       setOnline(true);
@@ -320,7 +353,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('online', up);
       window.removeEventListener('offline', down);
     };
-  }, [refreshActive, refreshRoom]);
+  }, [refreshActive, refreshRoom, refreshSolo]);
 
   // Re-check the online dot every 10 s (presence goes stale if a phone just vanishes).
   useEffect(() => {
@@ -331,6 +364,30 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     () => presence.some((p) => p.slot !== slot && serverNow() - (p.at ?? 0) < 70000),
     [presence, slot, tick], // eslint-disable-line react-hooks/exhaustive-deps
   );
+
+  // "Last seen" (v1.10): tell the server while the app is open (every minute,
+  // and once more on the way out), and remember the partner's latest presence.
+  useEffect(() => {
+    if (!slot) return;
+    const say = () => { api.seen(slot).catch(() => {}); };
+    if (document.visibilityState === 'visible') say();
+    const t = setInterval(() => { if (document.visibilityState === 'visible') say(); }, 60000);
+    document.addEventListener('visibilitychange', say);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener('visibilitychange', say);
+    };
+  }, [slot]);
+  for (const p of presence) if (p.slot !== slot && (p.at ?? 0) > presenceSeen.current) presenceSeen.current = p.at ?? 0;
+  const partnerRow = slot ? players[(3 - slot) as Slot] : null;
+  const dbSeen = partnerRow?.last_seen_at ? Date.parse(partnerRow.last_seen_at) : 0;
+  const partnerLastSeen = Math.max(dbSeen || 0, presenceSeen.current) || null;
+  // When the partner drops off, pick up the server's latest "last seen".
+  const wasOnline = useRef(false);
+  useEffect(() => {
+    if (wasOnline.current && !partnerOnline) void refreshRoom();
+    wasOnline.current = partnerOnline;
+  }, [partnerOnline, refreshRoom]);
 
   const chooseSlot = useCallback((s: Slot) => {
     saveSlot(s);
@@ -365,12 +422,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       pushTaunt,
       sendTyping,
       partnerTyping,
+      solo,
+      setSoloState,
+      refreshSolo,
+      partnerLastSeen,
       toast,
       dismissToast,
       reportError,
     }),
     [slot, players, history, active, activeLoaded, pulse, online, realtime, presence, toasts, partnerOnline, wordSettings,
-      chooseSlot, setPlayers, refreshHistory, refreshActive, setActive, ping, pushTaunt, sendTyping, partnerTyping, toast, dismissToast, reportError],
+      chooseSlot, setPlayers, refreshHistory, refreshActive, setActive, ping, pushTaunt, sendTyping, partnerTyping, toast, dismissToast, reportError,
+      solo, setSoloState, refreshSolo, partnerLastSeen],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

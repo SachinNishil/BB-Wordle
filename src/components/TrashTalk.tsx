@@ -5,7 +5,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { api } from '../lib/api';
 import { feedTaunts, onNewTaunts } from '../lib/tauntFeed';
-import type { GameView, Player, Slot } from '../lib/types';
+import type { GameView, Player, Slot, Taunt } from '../lib/types';
 import { useStore } from '../store';
 import { Avatar } from './Avatar';
 import { Icon } from './Icon';
@@ -33,6 +33,14 @@ export function isEmojiOnly(text: string) {
 export function chatCase(raw: string) {
   const lower = raw.toLowerCase().replace(/\bi\b/g, 'I');
   return lower.replace(/(^\s*|[.!?]\s+)([a-z])/g, (_m, a: string, b: string) => a + b.toUpperCase());
+}
+
+/** Anything you can trash talk on (v1.10): a battle, or a solo game being watched. */
+export interface Talk { id: string; taunts?: Taunt[]; booms?: Taunt[] }
+
+async function sendTalk<T extends Talk>(slot: Slot, target: T, solo: boolean, body: string, kind: 'chat' | 'boom'): Promise<T | null> {
+  if (solo) return (await api.soloTaunt(slot, target.id, body, kind)).solo as unknown as T;
+  return (await api.sendTaunt(slot, target.id, body, kind)).game as unknown as T | null;
 }
 
 /** Sending a message: saves it, pushes it to the partner's phone, nudges a refresh. */
@@ -142,13 +150,15 @@ export function ChatPanel({ game, slot, players, draft, onSent, sendNow, onClose
 
 /** Composer + messages. `dock` sits under the board while spectating (no log: the chat box shows it);
  *  `card` lives on the results screen; `sheet` is the chat opened from the chat box. */
-export function TrashTalk({ game, slot, players, onGame, variant, onClose }: {
-  game: GameView;
+export function TrashTalk<T extends Talk>({ game, slot, players, onGame, variant, onClose, solo = false }: {
+  game: T;
   slot: Slot;
   players: Record<Slot, Player>;
-  onGame: (g: GameView) => void;
+  onGame: (g: T) => void;
   variant: 'dock' | 'card' | 'sheet';
   onClose?: () => void;
+  /** v1.10: talking on a solo game (the player and whoever is watching). */
+  solo?: boolean;
 }) {
   const { ping, pushTaunt, reportError } = useStore();
   const [text, setText] = useState('');
@@ -171,15 +181,15 @@ export function TrashTalk({ game, slot, players, onGame, variant, onClose }: {
     if (!b || sending) return;
     setSending(true);
     try {
-      const r = await api.sendTaunt(slot, game.id, b.slice(0, TAUNT_MAX));
-      if (r.game) {
-        onGame(r.game);
+      const r = await sendTalk(slot, game, solo, b.slice(0, TAUNT_MAX), 'chat');
+      if (r) {
+        onGame(r);
         // Straight to their phone over the live channel, and a nudge to refresh
         // in case that message gets lost (it's in the database either way).
-        const mine = [...(r.game.taunts ?? [])].reverse().find((t) => t.from === slot);
+        const mine = [...(r.taunts ?? [])].reverse().find((t) => t.from === slot);
         if (mine) pushTaunt(game.id, mine);
       }
-      ping('game', 'taunt');
+      ping('game', solo ? 'solo-taunt' : 'taunt');
       navigator.vibrate?.(12);
       if (b === text.trim()) setText('');
       setShowLines(false);
@@ -360,7 +370,7 @@ export function TauntLayer() {
 }
 
 /** Lets a screen hand its latest copy of the game's trash talk to the feed. */
-export function useFeedTaunts(game: GameView | null, slot: Slot | null) {
+export function useFeedTaunts(game: Talk | null, slot: Slot | null) {
   const all = [...(game?.taunts ?? []), ...(game?.booms ?? [])];
   const ids = all.map((t) => t.id).join(',');
   useEffect(() => {
@@ -375,7 +385,7 @@ export const SOUNDBOARD = ['😂', '🔥', '💀', '🐢', '😏', '👀', '🤡
  * as often as you like; each one bursts over your partner's board and makes
  * their screen jump. No messages here; those open up once you've finished.
  */
-export function Soundboard({ game, slot }: { game: GameView; slot: Slot }) {
+export function Soundboard({ game, slot, solo = false }: { game: Talk; slot: Slot; solo?: boolean }) {
   const { pushTaunt } = useStore();
   const [pops, setPops] = useState<{ id: number; e: string }[]>([]);
   const n = useRef(0);
@@ -384,9 +394,9 @@ export function Soundboard({ game, slot }: { game: GameView; slot: Slot }) {
     const id = ++n.current;
     setPops((p) => [...p.slice(-5), { id, e }]);
     setTimeout(() => setPops((p) => p.filter((x) => x.id !== id)), 700);
-    api.sendTaunt(slot, game.id, e, 'boom')
+    sendTalk(slot, game, solo, e, 'boom')
       .then((r) => {
-        const mine = [...(r.game?.booms ?? [])].reverse().find((t) => t.from === slot && t.body === e);
+        const mine = [...(r?.booms ?? [])].reverse().find((t) => t.from === slot && t.body === e);
         if (mine) pushTaunt(game.id, { ...mine, kind: 'boom' });
       })
       .catch(() => { /* too fast or offline: a lost boom doesn't matter */ });

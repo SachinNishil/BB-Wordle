@@ -9,6 +9,17 @@ export interface Release {
 
 export const VERSIONS: Release[] = [
   {
+    version: '1.10.0',
+    date: '2026-10-10',
+    changes: [
+      'Solo now has the same 3, 2, 1 and a clock at the top, like a battle. There\'s a give up flag too.',
+      'Solo games get their own table at the bottom of Stats (games, solve rate, guesses, times, streak). They\'re kept apart: nothing in it is added to the battle numbers.',
+      'Watch your partner play solo: when they\'re on a solo game, Home shows it with a Watch button. You see their board, what they\'re typing, their clock and the word, with the same emojis and messages as spectating.',
+      'While someone is watching your solo game, the soundboard appears above your board so you can boom back.',
+      'When your partner isn\'t in the app, Home shows when they were last seen under their photo.',
+    ],
+  },
+  {
     version: '1.9.0',
     date: '2026-10-10',
     changes: [

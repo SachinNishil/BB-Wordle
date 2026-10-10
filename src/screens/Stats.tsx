@@ -3,7 +3,8 @@ import { Avatar } from '../components/Avatar';
 import { TopBar } from '../components/TopBar';
 import { fmtDuration } from '../lib/clock';
 import { awards, headToHead, playerStats, type PlayerStats } from '../lib/stats';
-import type { Slot } from '../lib/types';
+import { api } from '../lib/api';
+import type { Player, Slot, SoloStats } from '../lib/types';
 import { useStore } from '../store';
 
 const pct = (x: number | null) => (x == null ? '–' : `${Math.round(x * 100)}%`);
@@ -27,11 +28,71 @@ function Distribution({ s, color }: { s: PlayerStats; color: string }) {
   );
 }
 
+/**
+ * Solo (v1.10): its own table, from solo games only. Nothing here is added to
+ * the battle numbers above, and no battle counts here.
+ */
+function SoloTable({ stats, players }: { stats: SoloStats[] | null; players: Record<Slot, Player> }) {
+  if (!stats) return null;
+  const get = (x: Slot): SoloStats => stats.find((r) => r.slot === x) ?? { slot: x, played: 0, solved: 0, avg_guesses: null, best_ms: null, avg_ms: null, dist: [0, 0, 0, 0, 0, 0], streak: 0 };
+  const a = get(1);
+  const b = get(2);
+  if (a.played + b.played === 0) {
+    return (
+      <section className="card solo-stats">
+        <p className="eyebrow">Solo</p>
+        <p className="muted small">No solo games yet. They get their own table here, kept apart from the battles.</p>
+      </section>
+    );
+  }
+  const n = (v: number | string | null) => (v == null ? null : Number(v));
+  const rate = (r: SoloStats) => (r.played ? r.solved / r.played : null);
+  const better = (x: number | null, y: number | null, low: boolean): Slot | null =>
+    x == null || y == null || x === y ? null : (low ? x < y : x > y) ? 1 : 2;
+  const top = (r: SoloStats) => { const m = Math.max(...r.dist); return m ? r.dist.indexOf(m) + 1 : null; };
+  const rows: { label: string; v: [string, string]; best: Slot | null }[] = [
+    { label: 'Solo games', v: [String(a.played), String(b.played)], best: null },
+    { label: 'Solved', v: [String(a.solved), String(b.solved)], best: null },
+    { label: 'Solve rate', v: [pct(rate(a)), pct(rate(b))], best: better(rate(a), rate(b), false) },
+    { label: 'Average guesses', v: [num(n(a.avg_guesses)), num(n(b.avg_guesses))], best: better(n(a.avg_guesses), n(b.avg_guesses), true) },
+    { label: 'Average solve time', v: [fmtDuration(n(a.avg_ms)), fmtDuration(n(b.avg_ms))], best: better(n(a.avg_ms), n(b.avg_ms), true) },
+    { label: 'Fastest solve', v: [fmtDuration(a.best_ms), fmtDuration(b.best_ms)], best: better(a.best_ms, b.best_ms, true) },
+    { label: 'Current streak', v: [String(a.streak), String(b.streak)], best: better(a.streak, b.streak, false) },
+    { label: 'Most common score', v: [top(a) ? String(top(a)) : '–', top(b) ? String(top(b)) : '–'], best: null },
+  ];
+  return (
+    <section className="card solo-stats" aria-label="Solo stats">
+      <p className="eyebrow">Solo</p>
+      <table className="stats-table">
+        <thead>
+          <tr>
+            <th />
+            <th><span className="th-player"><Avatar player={players[1]} size={22} />{players[1].name}</span></th>
+            <th><span className="th-player"><Avatar player={players[2]} size={22} />{players[2].name}</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.label}>
+              <td>{r.label}</td>
+              <td className={r.best === 1 ? 'best p1' : ''}>{r.v[0]}</td>
+              <td className={r.best === 2 ? 'best p2' : ''}>{r.v[1]}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="muted small">Solo games only. They're kept apart: nothing here counts in the battle numbers above.</p>
+    </section>
+  );
+}
+
 export function StatsScreen() {
   const { history, players, refreshHistory } = useStore();
   const [distFor, setDistFor] = useState<Slot>(1);
+  const [solo, setSolo] = useState<SoloStats[] | null>(null);
   useEffect(() => {
     void refreshHistory();
+    api.soloStats().then(setSolo).catch(() => setSolo(null));
   }, [refreshHistory]);
 
   const games = history ?? [];
@@ -57,6 +118,7 @@ export function StatsScreen() {
           <h2>No stats yet</h2>
           <p className="muted">Finish your first battle and the scoreboard comes alive.</p>
         </div>
+        <SoloTable stats={solo} players={players} />
       </div>
     );
   }
@@ -161,6 +223,8 @@ export function StatsScreen() {
           </div>
         </section>
       )}
+
+      <SoloTable stats={solo} players={players} />
     </div>
   );
 }

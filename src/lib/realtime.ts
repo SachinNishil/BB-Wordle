@@ -22,7 +22,7 @@ import { supabase } from './supabase';
 import type { Slot, Taunt } from './types';
 
 export type ChangeKind = 'game' | 'words' | 'room';
-export type Screen = 'home' | 'game' | 'words' | 'stats' | 'history' | 'settings' | 'other';
+export type Screen = 'home' | 'game' | 'words' | 'stats' | 'history' | 'settings' | 'solo' | 'watch' | 'other';
 
 export interface PresenceInfo {
   slot: Slot;
