@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Board, REVEAL_MS } from '../components/Board';
 import { Icon } from '../components/Icon';
-import { Elapsed } from '../components/Live';
+import { SoloElapsed } from '../components/Live';
 import { WordTiles } from '../components/Tiles';
 import { TrashTalk, useFeedTaunts } from '../components/TrashTalk';
 import { api } from '../lib/api';
@@ -102,7 +102,7 @@ export function SoloWatchScreen({ id }: { id: string }) {
         <h1 className="topbar-title">
           👀 Watching {player.name}
           <span className="topbar-clock spectate-clock" aria-label={`${player.name}'s time`}>
-            {' '}· <Elapsed startedAt={solo.started_at} durationMs={solo.duration_ms} />
+            {' '}· <SoloElapsed solo={solo} />{solo.paused && playing ? ' ⏸' : ''}
           </span>
         </h1>
         <div className="topbar-right" />
@@ -110,6 +110,8 @@ export function SoloWatchScreen({ id }: { id: string }) {
       <div className="spectate-line">
         {done ? (
           <span>{verdict}</span>
+        ) : solo.paused ? (
+          <span>⏸ {player.name} stepped away, so the clock is paused</span>
         ) : counting ? (
           <span>{player.name} is about to start a solo game…</span>
         ) : (

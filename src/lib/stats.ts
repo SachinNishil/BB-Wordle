@@ -16,6 +16,9 @@ export interface PlayerStats {
   avgSolveMs: number | null; // solved rounds only
   currentStreak: number; // solved in a row, most recent first
   longestStreak: number;
+  /** v1.11: battles won in a row (a draw or a loss ends it). What Stats shows as streaks. */
+  currentWinStreak: number;
+  longestWinStreak: number;
   fastestSolveMs: number | null;
   mostCommonScore: number | null;
   distribution: number[]; // index 0..5 = solved in 1..6
@@ -41,6 +44,12 @@ export function playerStats(games: HistoryGame[], slot: Slot): PlayerStats {
   }
   let current = 0;
   for (let i = rounds.length - 1; i >= 0 && rounds[i].p.status === 'solved'; i--) current++;
+  let longestWin = 0;
+  let winRun = 0;
+  for (const r of rounds) {
+    winRun = r.g.winner === slot ? winRun + 1 : 0;
+    longestWin = Math.max(longestWin, winRun);
+  }
 
   const times = solved.map((r) => r.p.duration_ms).filter((t): t is number => t != null);
   const maxCount = Math.max(...distribution);
@@ -58,6 +67,8 @@ export function playerStats(games: HistoryGame[], slot: Slot): PlayerStats {
     avgSolveMs: avg(times),
     currentStreak: current,
     longestStreak: longest,
+    currentWinStreak: winRun,
+    longestWinStreak: longestWin,
     fastestSolveMs: times.length ? Math.min(...times) : null,
     // Ties go to the lower (better) score.
     mostCommonScore: solved.length ? distribution.indexOf(maxCount) + 1 : null,

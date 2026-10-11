@@ -57,7 +57,7 @@ function SoloTable({ stats, players }: { stats: SoloStats[] | null; players: Rec
     { label: 'Average guesses', v: [num(n(a.avg_guesses)), num(n(b.avg_guesses))], best: better(n(a.avg_guesses), n(b.avg_guesses), true) },
     { label: 'Average solve time', v: [fmtDuration(n(a.avg_ms)), fmtDuration(n(b.avg_ms))], best: better(n(a.avg_ms), n(b.avg_ms), true) },
     { label: 'Fastest solve', v: [fmtDuration(a.best_ms), fmtDuration(b.best_ms)], best: better(a.best_ms, b.best_ms, true) },
-    { label: 'Current streak', v: [String(a.streak), String(b.streak)], best: better(a.streak, b.streak, false) },
+    { label: 'Solved in a row', v: [String(a.streak), String(b.streak)], best: better(a.streak, b.streak, false) },
     { label: 'Most common score', v: [top(a) ? String(top(a)) : '–', top(b) ? String(top(b)) : '–'], best: null },
   ];
   return (
@@ -135,8 +135,10 @@ export function StatsScreen() {
     { label: 'Average guesses', v: [num(s[1].avgGuesses), num(s[2].avgGuesses)], best: better(s[1].avgGuesses, s[2].avgGuesses, true) },
     { label: 'Average solve time', v: [fmtDuration(s[1].avgSolveMs), fmtDuration(s[2].avgSolveMs)], best: better(s[1].avgSolveMs, s[2].avgSolveMs, true) },
     { label: 'Fastest solve', v: [fmtDuration(s[1].fastestSolveMs), fmtDuration(s[2].fastestSolveMs)], best: better(s[1].fastestSolveMs, s[2].fastestSolveMs, true) },
-    { label: 'Current streak', v: [String(s[1].currentStreak), String(s[2].currentStreak)], best: better(s[1].currentStreak, s[2].currentStreak, false) },
-    { label: 'Longest streak', v: [String(s[1].longestStreak), String(s[2].longestStreak)], best: better(s[1].longestStreak, s[2].longestStreak, false) },
+    // v1.11: streaks are battles won in a row (they used to count rounds solved, so a
+    // player who lost every battle but still solved the word had the same streak).
+    { label: 'Current win streak', v: [String(s[1].currentWinStreak), String(s[2].currentWinStreak)], best: better(s[1].currentWinStreak, s[2].currentWinStreak, false) },
+    { label: 'Longest win streak', v: [String(s[1].longestWinStreak), String(s[2].longestWinStreak)], best: better(s[1].longestWinStreak, s[2].longestWinStreak, false) },
     { label: 'Most common score', v: [s[1].mostCommonScore ? String(s[1].mostCommonScore) : '–', s[2].mostCommonScore ? String(s[2].mostCommonScore) : '–'], best: null },
   ];
 
@@ -193,7 +195,7 @@ export function StatsScreen() {
             ))}
           </tbody>
         </table>
-        <p className="muted small">Win rate counts battles won. Solve rate counts rounds solved. Averages use solved rounds.</p>
+        <p className="muted small">Win rate and win streaks count battles won (a draw or a loss ends a streak). Solve rate counts rounds solved. Averages use solved rounds.</p>
       </section>
 
       <section className="card">

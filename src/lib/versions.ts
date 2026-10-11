@@ -9,6 +9,17 @@ export interface Release {
 
 export const VERSIONS: Release[] = [
   {
+    version: '1.11.0',
+    date: '2026-10-11',
+    changes: [
+      'Solo: going back (or leaving the app) now pauses the clock. Come back and it carries on from where it stopped. Time away never counts.',
+      'When your partner is watching your game (battle or solo), an 👀 with their name stays in the top bar, after a one-time "is watching you" notice.',
+      'Stats: streaks now count battles won in a row ("Current win streak", "Longest win streak"). They used to count rounds solved, so someone who lost every battle could still show a long streak.',
+      'Home: your two photos stay level when "Last seen" shows under your partner.',
+      'The WORDLE title now rolls its letters one by one every few seconds, like a slot machine landing on the same letter.',
+    ],
+  },
+  {
     version: '1.10.0',
     date: '2026-10-10',
     changes: [

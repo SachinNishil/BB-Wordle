@@ -241,6 +241,17 @@ textarea { resize: vertical; min-height: 120px; font-family: ui-monospace, SFMon
 .logo-tile {
   width: 40px; height: 40px; display: grid; place-items: center; border-radius: 9px;
   color: #fff; font-weight: 800; font-size: 1.45rem; animation: logo-in 520ms cubic-bezier(.2, 1.4, .4, 1) both;
+  animation-delay: calc(var(--i, 0) * 80ms); overflow: hidden;
+}
+/* v1.11: a slot-machine roll, one letter after another, every 7 seconds. */
+.logo-letter {
+  display: block; line-height: 1; animation: logo-roll 7s cubic-bezier(.45, 0, .25, 1) infinite;
+  animation-delay: calc(1.4s + var(--i, 0) * 160ms);
+}
+@keyframes logo-roll {
+  0%, 9%, 100% { transform: translateY(0); }
+  3.5% { transform: translateY(-140%); }
+  3.6% { transform: translateY(140%); }
 }
 .logo-tile.correct { background: var(--green); }
 .logo-tile.present { background: var(--yellow); }
@@ -874,7 +885,12 @@ html.boom-shake .screen { animation: boom-shake 380ms cubic-bezier(.36, .07, .19
 .word-pool { font-size: 0.9rem; margin-top: 4px; }
 
 /* --------------------------------------------------------------- solo with a clock, watching, last seen (v1.10) */
-.last-seen { font-size: 0.72rem; font-weight: 600; color: var(--ink-3); margin-top: -6px; white-space: nowrap; }
+/* v1.11: out of the flow, so both photos and names stay level whether it shows or not. */
+.last-seen {
+  position: absolute; top: calc(100% + 2px); left: 50%; transform: translateX(-50%);
+  font-size: 0.72rem; font-weight: 600; color: var(--ink-3); white-space: nowrap;
+}
+.couple.has-seen { padding-bottom: 22px; }
 .solo-live {
   flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px;
   box-shadow: var(--shadow), inset 0 0 0 2px color-mix(in srgb, var(--p2) 35%, transparent);
@@ -886,7 +902,13 @@ html.boom-shake .screen { animation: boom-shake 380ms cubic-bezier(.36, .07, .19
 .vs-strip.chat-strip.solo-strip { grid-template-columns: minmax(0, 1fr); gap: 4px; }
 .solo-strip .soundboard { grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 3px; padding: 5px; }
 .solo-strip .sb-key { height: 38px; font-size: 1.2rem; border-radius: 10px; }
-.watching-chip { justify-self: center; font-size: 0.8rem; font-weight: 700; color: var(--ink-2); }
+.watching-eye {
+  display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px 2px 6px; border-radius: 999px;
+  background: var(--surface-2); box-shadow: inset 0 0 0 1.5px var(--line-strong);
+  font-size: 0.74rem; font-weight: 800; color: var(--ink-2); line-height: 1.4; white-space: nowrap;
+}
+.watching-eye > span:first-child { font-size: 0.95rem; }
+@media (max-width: 359px) { .watching-eye-text { display: none; } }
 .solo-loading { flex: 1; display: grid; place-items: center; }
 .solo-watch-done { flex: none; display: flex; gap: 8px; justify-content: center; margin-top: 8px; }
 .solo-watch-done .btn { flex: 1; max-width: 220px; }
@@ -910,5 +932,7 @@ html.boom-shake .screen { animation: boom-shake 380ms cubic-bezier(.36, .07, .19
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 1ms !important; animation-delay: 0ms !important; transition-duration: 1ms !important; }
+  /* A looping roll squeezed into 1 ms would flicker: keep the letters still instead. */
+  .logo-tile .logo-letter { animation: none !important; }
 }
 a.btn { text-decoration: none; }

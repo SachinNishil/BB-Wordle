@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { Avatar } from '../components/Avatar';
 import { Icon } from '../components/Icon';
 import { InstallHint } from '../components/InstallHint';
-import { Elapsed } from '../components/Live';
+import { Elapsed, SoloElapsed } from '../components/Live';
 import { GameWords } from '../components/Tiles';
 import { api } from '../lib/api';
 import { APP_VERSION } from '../lib/versions';
@@ -239,7 +239,7 @@ function Couple({ me, partner }: { me: Player; partner: Player }) {
 
   return (
     <>
-      <div className={`couple${me.status_text || partner.status_text ? ' talking' : ''}`}>
+      <div className={`couple${me.status_text || partner.status_text ? ' talking' : ''}${!partnerOnline && partnerLastSeen ? ' has-seen' : ''}`}>
         {side(me, true)}
         <span className="couple-vs"><span aria-hidden="true">❤️</span> VS <span aria-hidden="true">❤️</span></span>
         {side(partner, false)}
@@ -274,7 +274,7 @@ function PartnerSolo({ game, partner }: { game: SoloView; partner: Player }) {
       <div className="solo-live-main">
         <p className="eyebrow live-eyebrow"><i className="dot" /> {partner.name} is playing solo</p>
         <p className="solo-live-line">
-          {counting ? 'Just starting…' : <>Guess {Math.min(game.guesses.length + 1, 6)}/6 · <Elapsed startedAt={game.started_at} durationMs={game.duration_ms} /></>}
+          {counting ? 'Just starting…' : <>Guess {Math.min(game.guesses.length + 1, 6)}/6 · <SoloElapsed solo={game} /></>}
         </p>
       </div>
       <button className="btn primary" onClick={() => go(`/solo/watch/${game.id}`)}>👀 Watch</button>
@@ -287,8 +287,9 @@ export function Home() {
   if (!me || !partner) return null;
   // A partner's solo game is worth watching while they're on it (or touched it lately).
   const ps = solo.partner;
+  // v1.11: leaving the solo screen pauses it, so a paused game isn't shown as live.
   const psActive = ps && (partnerPresence.some((p) => p.screen === 'solo')
-    || serverNow() - Math.max(Date.parse(ps.started_at), ps.draft_at ? Date.parse(ps.draft_at) : 0) < 10 * 60000);
+    || (!ps.paused && serverNow() - Math.max(Date.parse(ps.started_at), ps.draft_at ? Date.parse(ps.draft_at) : 0) < 10 * 60000));
   const recent = (history ?? []).slice(0, 3);
   return (
     <div className="screen scroll home">
@@ -305,7 +306,11 @@ export function Home() {
       <div className="brand">
         <h1 className="logo" aria-label="Wordle">
           {['W', 'O', 'R', 'D', 'L', 'E'].map((l, i) => (
-            <span key={i} className={`logo-tile ${i === 1 || i === 4 ? 'present' : i === 3 ? 'absent' : 'correct'}`} style={{ animationDelay: `${i * 80}ms` }}>{l}</span>
+            // v1.11: every few seconds each letter in turn rolls up and the same letter rolls back in.
+            <span key={i} className={`logo-tile ${i === 1 || i === 4 ? 'present' : i === 3 ? 'absent' : 'correct'}`}
+              style={{ '--i': i } as CSSProperties}>
+              <span className="logo-letter">{l}</span>
+            </span>
           ))}
         </h1>
         <p className="logo-sub">for two</p>
@@ -317,7 +322,7 @@ export function Home() {
       {psActive && ps && <PartnerSolo game={ps} partner={partner} />}
       <button className="solo-link" onClick={() => go('/solo')}>
         {solo.mine
-          ? <span>Carry on with your <b>solo</b> game · <Elapsed startedAt={solo.mine.started_at} durationMs={null} /> ›</span>
+          ? <span>Carry on with your <b>solo</b> game · <SoloElapsed solo={solo.mine} />{solo.mine.paused ? ' (paused)' : ''} ›</span>
           : <span>Or play <b>solo</b>, on your own (it has its own stats) ›</span>}
       </button>
 

@@ -184,6 +184,12 @@ export interface SoloView {
   draft_at?: string | null;
   taunts?: Taunt[];
   booms?: Taunt[];
+  /** v1.11: the clock stops while the player is away from the solo screen. */
+  paused?: boolean;
+  /** Time spent paused so far. */
+  paused_ms?: number;
+  /** Time on the clock when this was sent. */
+  elapsed_ms?: number;
 }
 
 export interface SoloState {

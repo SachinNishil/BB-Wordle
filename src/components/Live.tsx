@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { fmtDuration, serverNow } from '../lib/clock';
-import type { MeView, PartnerView, Player } from '../lib/types';
+import type { MeView, PartnerView, Player, SoloView } from '../lib/types';
 import { Avatar } from './Avatar';
 import { MiniGrid } from './Tiles';
 
@@ -16,6 +16,24 @@ export function Elapsed({ startedAt, durationMs }: { startedAt: string | null; d
   if (durationMs != null) return <>{fmtDuration(durationMs)}</>;
   if (!startedAt) return <>0:00</>;
   return <>{fmtDuration(Math.max(0, serverNow() - Date.parse(startedAt)))}</>;
+}
+
+/** A solo game's clock (v1.11): stands still while paused, skips the time away. */
+export function SoloElapsed({ solo }: { solo: SoloView }) {
+  if (solo.duration_ms != null) return <Elapsed startedAt={solo.started_at} durationMs={solo.duration_ms} />;
+  if (solo.paused) return <Elapsed startedAt={solo.started_at} durationMs={solo.elapsed_ms ?? 0} />;
+  const from = new Date(Date.parse(solo.started_at) + (solo.paused_ms ?? 0)).toISOString();
+  return <Elapsed startedAt={from} durationMs={null} />;
+}
+
+/** v1.11: a lasting sign that your partner is watching your board. */
+export function WatchingEye({ name }: { name: string }) {
+  return (
+    <span className="watching-eye" role="status" aria-label={`${name} is watching`} title={`${name} is watching`}>
+      <span aria-hidden="true">👀</span>
+      <span className="watching-eye-text">{name}</span>
+    </span>
+  );
 }
 
 // No presence-based statuses ("Away", "Live") since v1.5: they were sometimes

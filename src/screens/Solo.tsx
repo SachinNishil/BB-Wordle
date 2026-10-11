@@ -7,7 +7,7 @@ import { Board, REVEAL_MS } from '../components/Board';
 import { Countdown } from '../components/Countdown';
 import { Icon } from '../components/Icon';
 import { Keyboard } from '../components/Keyboard';
-import { Elapsed } from '../components/Live';
+import { SoloElapsed, WatchingEye } from '../components/Live';
 import { WordTiles } from '../components/Tiles';
 import { Soundboard, TrashTalk, useFeedTaunts } from '../components/TrashTalk';
 import { api, ApiError } from '../lib/api';
@@ -21,7 +21,7 @@ import { useStore } from '../store';
 const PRAISE = ['Genius!', 'Magnificent!', 'Impressive!', 'Splendid!', 'Great!', 'Phew!'];
 
 export function SoloScreen() {
-  const { slot, players, toast, reportError, ping, pulse, sendTyping, setSoloState, partnerPresence } = useStore();
+  const { slot, players, toast, reportError, ping, pulse, sendTyping, setSoloState, partnerPresence, refreshSolo } = useStore();
   const [solo, setSolo] = useState<SoloView | null>(null);
   const [failed, setFailed] = useState(false);
   const [typed, setTyped] = useState('');
@@ -80,6 +80,37 @@ export function SoloScreen() {
 
   const playing = solo?.status === 'playing';
   const row = solo?.guesses.length ?? 0;
+
+  // v1.11: going back (or leaving the app) pauses the clock; coming back carries on.
+  const live = useRef<{ slot: Slot | null; id?: string; playing: boolean }>({ slot: null, playing: false });
+  live.current = { slot, id, playing };
+  useEffect(() => {
+    const pause = () => {
+      const { slot: s, id: g, playing: p } = live.current;
+      if (!s || !g || !p) return;
+      api.soloPause(s, g).then(() => { ping('game', 'solo-pause'); void refreshSolo(); }).catch(() => {});
+    };
+    const onVis = () => {
+      const { slot: s, id: g, playing: p } = live.current;
+      if (document.visibilityState === 'hidden') return pause();
+      if (!s || !g || !p) return;
+      api.soloResume(s, g)
+        .then((r) => { setSolo((cur) => (cur && r.solo.guesses.length < cur.guesses.length ? cur : r.solo)); ping('game', 'solo-resume'); })
+        .catch(() => {});
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      document.removeEventListener('visibilitychange', onVis);
+      pause();
+    };
+  }, [ping, refreshSolo]);
+
+  // Say once when your partner starts watching (the eye in the top bar stays).
+  const wasWatched = useRef(false);
+  useEffect(() => {
+    if (watched && playing && !wasWatched.current && partner) toast(`👀 ${partner.name} is watching you`);
+    wasWatched.current = watched && playing;
+  }, [watched, playing]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Live typing for the watcher: over the live channel, plus a saved copy.
   useEffect(() => {
@@ -200,9 +231,10 @@ export function SoloScreen() {
           Solo
           {solo && (
             <span className="topbar-clock solo-clock" aria-label="Your time">
-              {' '}· <Elapsed startedAt={solo.started_at} durationMs={solo.duration_ms} />
+              {' '}· <SoloElapsed solo={solo} />
             </span>
           )}
+          {watched && playing && partner && <WatchingEye name={partner.name} />}
         </h1>
         <div className="topbar-right">
           {playing && !counting && (
@@ -214,7 +246,6 @@ export function SoloScreen() {
       {watched && playing && partner && slot && solo && (
         <div className="vs-strip chat-strip solo-strip">
           <Soundboard game={solo} slot={slot} solo />
-          <span className="watching-chip" role="status">👀 {partner.name} is watching</span>
         </div>
       )}
 
@@ -233,7 +264,7 @@ export function SoloScreen() {
           <div className="finished-head">
             <div>
               <p className="eyebrow">{solved ? `Solved in ${guesses.length}` : solo!.gave_up ? 'You gave up' : 'Out of guesses'}</p>
-              <p className="finished-time">Your time <b><Elapsed startedAt={solo!.started_at} durationMs={solo!.duration_ms} /></b></p>
+              <p className="finished-time">Your time <b><SoloElapsed solo={solo!} /></b></p>
             </div>
             {solo!.word && <div className="finished-word"><WordTiles word={solo!.word} size={30} /></div>}
           </div>

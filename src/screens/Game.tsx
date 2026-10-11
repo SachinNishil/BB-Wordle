@@ -4,14 +4,14 @@ import { Board, REVEAL_MS } from '../components/Board';
 import { Countdown } from '../components/Countdown';
 import { Icon } from '../components/Icon';
 import { Keyboard } from '../components/Keyboard';
-import { Elapsed, PartnerMini, SideCard } from '../components/Live';
+import { Elapsed, PartnerMini, SideCard, WatchingEye } from '../components/Live';
 import { fromGameView, ResultsView } from '../components/Results';
 import { WordTiles } from '../components/Tiles';
 import { Soundboard, TrashTalk, useFeedTaunts } from '../components/TrashTalk';
 import { api, ApiError } from '../lib/api';
 import { serverNow } from '../lib/clock';
 import { loadDictionary } from '../lib/dictionary';
-import type { GameView } from '../lib/types';
+import type { GameView, Slot } from '../lib/types';
 import { keyboardStates } from '../lib/wordle';
 import { back, go } from '../router';
 import { useStore } from '../store';
@@ -34,7 +34,7 @@ function phaseOf(g: GameView | null, loaded: boolean): Phase {
 
 export function GameScreen({ id }: { id?: string }) {
   const store = useStore();
-  const { slot, players, active, activeLoaded, pulse, ping, toast, reportError, setActive, sendTyping, partnerTyping, setQuietInvites } = store;
+  const { slot, players, active, activeLoaded, pulse, ping, toast, reportError, setActive, sendTyping, partnerTyping, setQuietInvites, partnerPresence } = store;
   const [rematching, setRematching] = useState(false);
   const [gameId, setGameId] = useState<string | null>(id ?? null);
   const [game, setGame] = useState<GameView | null>(null);
@@ -123,6 +123,13 @@ export function GameScreen({ id }: { id?: string }) {
     const t = setInterval(() => sendTyping(gid, myRow, typed), 3000);
     return () => clearInterval(t);
   }, [phase, partnerDone, gid, myRow, typed, sendTyping]);
+  // v1.11: my partner has finished and is on the game screen, so they're watching me.
+  const partnerWatching = phase === 'playing' && partnerDone && partnerPresence.some((p) => p.screen === 'game');
+  const wasWatched = useRef(false);
+  useEffect(() => {
+    if (partnerWatching && !wasWatched.current && slot) toast(`👀 ${players[(3 - slot) as Slot].name} is watching you`);
+    wasWatched.current = partnerWatching;
+  }, [partnerWatching]); // eslint-disable-line react-hooks/exhaustive-deps
   // Backup (v1.6.1): also save the row to the server (a moment after typing stops),
   // so a spectator sees it even if the live connection on either phone has dropped
   // or this phone hasn't heard yet that they finished. The server only shows it to
@@ -673,6 +680,7 @@ export function GameScreen({ id }: { id?: string }) {
         <h1 className="topbar-title">
           {game.mode === 'challenge' ? 'Challenge ⚔️' : `Game #${game.number}`}
           {game.me.started_at && <span className="topbar-clock"> · <Elapsed startedAt={game.me.started_at} durationMs={game.me.duration_ms} /></span>}
+          {partnerWatching && <WatchingEye name={partner.name} />}
         </h1>
         <div className="topbar-right">
           {phase === 'playing' && (

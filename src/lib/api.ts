@@ -111,6 +111,8 @@ export const api = {
   soloState: (slot: Slot, id: string | null = null) => call<SoloState>('solo_state', { ...K, p_slot: slot, p_id: id }),
   soloTaunt: (slot: Slot, id: string, body: string, kind: 'chat' | 'boom' = 'chat') =>
     call<SoloOne>('solo_taunt', { ...K, p_slot: slot, p_id: id, p_body: body, p_kind: kind }),
+  soloPause: (slot: Slot, id: string) => call<SoloOne>('solo_pause', { ...K, p_slot: slot, p_id: id }),
+  soloResume: (slot: Slot, id: string) => call<SoloOne>('solo_resume', { ...K, p_slot: slot, p_id: id }),
   soloStats: () => call<SoloStats[]>('solo_stats', K),
   seen: (slot: Slot) => call<boolean>('seen', { ...K, p_slot: slot }),
 };
