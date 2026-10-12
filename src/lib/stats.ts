@@ -1,5 +1,5 @@
 // Every statistic in the app, computed from completed games. Pure functions.
-import type { GameMode, HistoryGame, HistoryPlayer, Slot } from './types';
+import type { GameMode, HistoryGame, HistoryPlayer, Slot, SoloStats } from './types';
 
 /** A failed round counts as 7 guesses for difficulty averages. */
 export const FAIL_SCORE = 7;
@@ -189,7 +189,7 @@ function leader(values: Record<Slot, number | null>, higherIsBetter: boolean): S
   return (higherIsBetter ? a > b : a < b) ? 1 : 2;
 }
 
-export function awards(games: HistoryGame[], names: Record<Slot, string>, fmtMs: (ms: number) => string): Award[] {
+export function awards(games: HistoryGame[], names: Record<Slot, string>, fmtMs: (ms: number) => string, solo: SoloStats[] = []): Award[] {
   const out: Award[] = [];
   const diffs = wordDifficulties(games);
   if (diffs.length) {
@@ -251,6 +251,95 @@ export function awards(games: HistoryGame[], names: Record<Slot, string>, fmtMs:
     const n = nemesisLetter(games, slot);
     if (n) out.push({ id: `nemesis-${slot}`, emoji: '🎯', title: `${names[slot]}'s Nemesis Letter`, holder: slot, value: n.letter,
       detail: `Guessed and missed ${n.count} time${n.count === 1 ? '' : 's'}` });
+  }
+  out.push(...moreAwards(games, names, fmtMs, solo));
+  return out;
+}
+
+const both = (f: (s: Slot) => number) => ({ 1: f(1), 2: f(2) }) as Record<Slot, number>;
+const tally = (names: Record<Slot, string>, v: Record<Slot, number | string>) => `${names[1]} ${v[1]}, ${names[2]} ${v[2]}`;
+
+/** v1.12: more of the Hall of fame. Each one only shows once there's something to show. */
+export function moreAwards(games: HistoryGame[], names: Record<Slot, string>, fmtMs: (ms: number) => string, solo: SoloStats[] = []): Award[] {
+  const out: Award[] = [];
+  const rounds = (slot: Slot) => games.map((g) => player(g, slot)).filter((p): p is HistoryPlayer => !!p);
+  const pick = (id: string, emoji: string, title: string, v: Record<Slot, number>, higher: boolean, detail: string) => {
+    const l = leader(v, higher);
+    out.push({ id, emoji, title, holder: l, value: l ? names[l] : 'Tied', detail });
+  };
+
+  // Sharpshooter: solved in 1 or 2 guesses.
+  const sharp = both((s) => rounds(s).filter((p) => p.status === 'solved' && p.guess_count <= 2).length);
+  if (sharp[1] + sharp[2] > 0) pick('sharp', '🏹', 'Sharpshooter', sharp, true, `Solved in 1 or 2 guesses · ${tally(names, sharp)}`);
+
+  // Fastest solve ever, with the word.
+  let fastest: { slot: Slot; ms: number; word: string; n: number } | null = null;
+  for (const g of games) for (const p of g.players) {
+    if (p.status !== 'solved' || p.duration_ms == null) continue;
+    if (!fastest || p.duration_ms < fastest.ms) fastest = { slot: p.slot, ms: p.duration_ms, word: p.slot === 1 ? g.word_for_1 : g.word_for_2, n: g.number };
+  }
+  if (fastest) out.push({ id: 'rocket', emoji: '🚀', title: 'Fastest Solve Ever', holder: fastest.slot, value: fmtMs(fastest.ms),
+    detail: `${names[fastest.slot]} on ${fastest.word} · game #${fastest.n}` });
+
+  // Unstoppable: the longest run of battles won.
+  const run = both((s) => playerStats(games, s).longestWinStreak);
+  if (Math.max(run[1], run[2]) > 1) pick('unstoppable', '🔥', 'Unstoppable', run, true, `Longest win streak · ${tally(names, run)}`);
+
+  // Photo finish: same guesses, decided by the clock, smallest gap.
+  let photo: { gap: number; g: HistoryGame } | null = null;
+  for (const g of games) {
+    const [a, b] = g.players;
+    if (!g.winner || a?.status !== 'solved' || b?.status !== 'solved' || a.guess_count !== b.guess_count) continue;
+    if (a.duration_ms == null || b.duration_ms == null) continue;
+    const gap = Math.abs(a.duration_ms - b.duration_ms);
+    if (!photo || gap < photo.gap) photo = { gap, g };
+  }
+  if (photo) out.push({ id: 'photo', emoji: '📸', title: 'Photo Finish', holder: photo.g.winner, value: fmtMs(photo.gap),
+    detail: `Closest clock decider · game #${photo.g.number}, ${names[photo.g.winner!]} by a whisker` });
+
+  // Last gasp: solved on the sixth and final guess.
+  const gasp = both((s) => rounds(s).filter((p) => p.status === 'solved' && p.guess_count === 6).length);
+  if (gasp[1] + gasp[2] > 0) pick('gasp', '😮‍💨', 'Last Gasp', gasp, true, `Solved on guess 6 · ${tally(names, gasp)}`);
+
+  // Best opener: most greens and yellows from the first guess, on average.
+  const open = { 1: null, 2: null } as Record<Slot, number | null>;
+  for (const s of [1, 2] as Slot[]) {
+    const firsts = rounds(s).map((p) => p.guesses[0]?.pattern).filter((x): x is string => !!x);
+    open[s] = firsts.length ? firsts.reduce((t, pat) => t + [...pat].filter((c) => c === 'G').length * 2 + [...pat].filter((c) => c === 'Y').length, 0) / firsts.length : null;
+  }
+  if (open[1] != null || open[2] != null) {
+    const l = leader(open, true);
+    out.push({ id: 'opener', emoji: '🎬', title: 'Best Opener', holder: l, value: l ? names[l] : 'Tied',
+      detail: `First-guess score (green 2, yellow 1) · ${names[1]} ${open[1]?.toFixed(1) ?? '–'}, ${names[2]} ${open[2]?.toFixed(1) ?? '–'}` });
+  }
+
+  // Each player's go-to first word.
+  for (const s of [1, 2] as Slot[]) {
+    const counts = new Map<string, number>();
+    for (const p of rounds(s)) if (p.guesses[0]) counts.set(p.guesses[0].word, (counts.get(p.guesses[0].word) ?? 0) + 1);
+    let top: [string, number] | null = null;
+    for (const e of counts) if (!top || e[1] > top[1] || (e[1] === top[1] && e[0] < top[0])) top = e;
+    if (top && top[1] > 1) out.push({ id: `goto-${s}`, emoji: '🔁', title: `${names[s]}'s Go-to Opener`, holder: s, value: top[0],
+      detail: `Opened with it ${top[1]} times` });
+  }
+
+  // Night owl: battles finished between 10 pm and 4 am.
+  const owl = both((s) => rounds(s).filter((p) => { if (!p.finished_at) return false; const h = new Date(p.finished_at).getHours(); return h >= 22 || h < 4; }).length);
+  if (owl[1] + owl[2] > 0) pick('owl', '🦉', 'Night Owl', owl, true, `Rounds finished after 10 pm · ${tally(names, owl)}`);
+
+  // White flag: give-ups (for fun).
+  const flag = both((s) => rounds(s).filter((p) => p.gave_up).length);
+  if (flag[1] + flag[2] > 0) pick('flag', '🏳️', 'White Flag', flag, true, `Rounds given up · ${tally(names, flag)}`);
+
+  // Solo: who plays the most, and the fastest solo solve.
+  const so = (s: Slot) => solo.find((r) => r.slot === s);
+  const played = both((s) => so(s)?.played ?? 0);
+  if (played[1] + played[2] > 0) pick('grinder', '🧘', 'Solo Grinder', played, true, `Solo games played · ${tally(names, played)}`);
+  const best = { 1: so(1)?.best_ms ?? null, 2: so(2)?.best_ms ?? null } as Record<Slot, number | null>;
+  if (best[1] != null || best[2] != null) {
+    const l = leader(best, false);
+    out.push({ id: 'speedrun', emoji: '🏃', title: 'Solo Speedrun', holder: l, value: l ? fmtMs(best[l]!) : 'Tied',
+      detail: `Fastest solo solve · ${names[1]} ${best[1] != null ? fmtMs(best[1]) : '–'}, ${names[2]} ${best[2] != null ? fmtMs(best[2]) : '–'}` });
   }
   return out;
 }

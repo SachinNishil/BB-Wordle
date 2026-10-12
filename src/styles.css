@@ -915,6 +915,12 @@ html.boom-shake .screen { animation: boom-shake 380ms cubic-bezier(.36, .07, .19
 .solo-done .trash.dock { box-shadow: none; padding: 0; animation: none; }
 .solo-stats .eyebrow { margin-bottom: 4px; }
 
+/* --------------------------------------------------------------- stats mode toggle (v1.12) */
+.mode-toggle { align-self: stretch; }
+.mode-toggle button { flex: 1; white-space: nowrap; }
+.mode-empty { text-align: center; padding: 18px 0 6px; }
+.section-head h3 .muted.small { font-weight: 600; }
+
 /* --------------------------------------------------------------- desktop */
 @media (min-width: 700px) {
   .screen { padding-top: calc(var(--safe-top) + 18px); }

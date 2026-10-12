@@ -9,6 +9,15 @@ export interface Release {
 
 export const VERSIONS: Release[] = [
   {
+    version: '1.12.0',
+    date: '2026-10-12',
+    changes: [
+      'Messages: after you send one, the keyboard and cursor stay put so you can keep typing. Tapping an emoji or a quick line doesn\'t close the keyboard either.',
+      'Stats: one table with a Classic / Challenge / Solo toggle at the top, instead of separate tables. The guess distribution below follows the same toggle.',
+      'Hall of fame has more awards: Sharpshooter, Fastest Solve Ever, Unstoppable, Photo Finish, Last Gasp, Best Opener, each of your go-to openers, Night Owl, White Flag, Solo Grinder and Solo Speedrun. Each one appears once there\'s something to show.',
+    ],
+  },
+  {
     version: '1.11.0',
     date: '2026-10-11',
     changes: [
