@@ -22,6 +22,8 @@ interface Store {
   me: Player | null;
   partner: Player | null;
   history: HistoryGame[] | null;
+  /** Finished solo games, newest first (v1.15, for badges). */
+  soloHistory: SoloView[] | null;
   active: GameView | null;
   activeLoaded: boolean;
   /** Increments whenever game data may have changed; screens refetch on it. */
@@ -86,6 +88,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [slot, setSlotState] = useState<Slot | null>(() => getSlot());
   const [players, setPlayersState] = useState<Record<Slot, Player>>(DEFAULT_PLAYERS);
   const [history, setHistory] = useState<HistoryGame[] | null>(null);
+  const [soloHistory, setSoloHistory] = useState<SoloView[] | null>(null);
   const [active, setActiveState] = useState<GameView | null>(null);
   const [activeLoaded, setActiveLoaded] = useState(false);
   const [pulse, setPulse] = useState(0);
@@ -153,6 +156,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     } catch (e) {
       reportError(e);
     }
+    // An older database without solo_history just means no solo badges yet.
+    api.soloHistory().then(setSoloHistory).catch(() => setSoloHistory((h) => h ?? []));
   }, [reportError]);
 
   const setActive = useCallback((g: GameView | null) => {
@@ -249,7 +254,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                 run: () => go('/game'),
               });
             }
-            if (p.what === 'finished') void refreshHistory();
+            if (p.what === 'finished' || p.what === 'solo-finished') void refreshHistory();
           }
           if (p.kind === 'room') void refreshRoom();
         },
@@ -402,6 +407,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       me: slot ? players[slot] : null,
       partner: slot ? players[(3 - slot) as Slot] : null,
       history,
+      soloHistory,
       active,
       activeLoaded,
       pulse,
@@ -430,7 +436,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       dismissToast,
       reportError,
     }),
-    [slot, players, history, active, activeLoaded, pulse, online, realtime, presence, toasts, partnerOnline, wordSettings,
+    [slot, players, history, soloHistory, active, activeLoaded, pulse, online, realtime, presence, toasts, partnerOnline, wordSettings,
       chooseSlot, setPlayers, refreshHistory, refreshActive, setActive, ping, pushTaunt, sendTyping, partnerTyping, toast, dismissToast, reportError,
       solo, setSoloState, refreshSolo, partnerLastSeen],
   );

@@ -5,6 +5,7 @@ import type { GameMode, GameResult, GameView, GuessRow, HistoryGame, Player, Pla
 import { patternToEmoji } from '../lib/wordle';
 import { useStore } from '../store';
 import { Avatar } from './Avatar';
+import { BadgeChips } from './Badges';
 import { Icon } from './Icon';
 import { MiniGrid, WordTiles } from './Tiles';
 
@@ -195,6 +196,7 @@ export function ResultsView({ data, title, isToday }: { data: ResultData; title?
             ) : (
               <MiniGrid patterns={data.sides[s].patterns} cell={20} gap={4} showEmpty={false} />
             )}
+            <BadgeChips round={data.sides[s]} label={`${players[s].name}'s badges`} />
           </div>
         ))}
       </div>

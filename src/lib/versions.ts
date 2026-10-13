@@ -9,6 +9,15 @@ export interface Release {
 
 export const VERSIONS: Release[] = [
   {
+    version: '1.15.0',
+    date: '2026-10-13',
+    changes: [
+      'Badges, like the ones in the NYT Wordle app. Every round can earn: Wordle in 1, Wordle in 2, Sea of Greens (no yellow tiles at all), Hard Mode (every hint reused), Golden Start (3+ greens first guess), Out of the Dark (solved after two all-grey guesses), Lightning (under 30 seconds) and Phew! (solved on guess 6).',
+      'Milestones, earned once each: day streaks (3 up to 365 days in a row), solved in a row (5 to 100), battle wins in a row (3 to 20) and games played (10 to 1000). Battles and solo games both count.',
+      'You see what you earned right after each round, on the results and in History. All badges and your progress are at the bottom of Stats, with a toggle for each of you. A notice pops up when you reach a new milestone.',
+    ],
+  },
+  {
     version: '1.14.1',
     date: '2026-10-13',
     changes: [

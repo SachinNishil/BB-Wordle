@@ -4,6 +4,7 @@
 // trash talk you while they do (the soundboard works both ways).
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Board, REVEAL_MS } from '../components/Board';
+import { BadgeChips } from '../components/Badges';
 import { Countdown } from '../components/Countdown';
 import { Icon } from '../components/Icon';
 import { Keyboard } from '../components/Keyboard';
@@ -21,7 +22,7 @@ import { useStore } from '../store';
 const PRAISE = ['Genius!', 'Magnificent!', 'Impressive!', 'Splendid!', 'Great!', 'Phew!'];
 
 export function SoloScreen() {
-  const { slot, players, toast, reportError, ping, pulse, sendTyping, setSoloState, partnerPresence, refreshSolo } = useStore();
+  const { slot, players, toast, reportError, ping, pulse, sendTyping, setSoloState, partnerPresence, refreshSolo, refreshHistory } = useStore();
   const [solo, setSolo] = useState<SoloView | null>(null);
   const [failed, setFailed] = useState(false);
   const [typed, setTyped] = useState('');
@@ -158,6 +159,7 @@ export function SoloScreen() {
       setTyped('');
       setRevealRow(at);
       ping('game', r.solo.status === 'playing' ? 'solo-guess' : 'solo-finished');
+      if (r.solo.status !== 'playing') void refreshHistory(); // badges
       setTimeout(() => {
         setRevealRow(null);
         if (r.pattern === 'GGGGG') {
@@ -177,7 +179,7 @@ export function SoloScreen() {
     } finally {
       setSubmitting(false);
     }
-  }, [slot, solo, typed, submitting, doShake, toast, ping, reportError, reload]);
+  }, [slot, solo, typed, submitting, doShake, toast, ping, reportError, reload, refreshHistory]);
 
   const canType = playing && !revealing && !counting && !submitting;
   const onKey = useCallback((k: string) => {
@@ -211,6 +213,7 @@ export function SoloScreen() {
       const r = await api.soloGiveUp(slot, solo.id);
       setSolo(r.solo);
       ping('game', 'solo-finished');
+      void refreshHistory();
     } catch (e) {
       reportError(e);
       void reload();
@@ -268,6 +271,7 @@ export function SoloScreen() {
             </div>
             {solo!.word && <div className="finished-word"><WordTiles word={solo!.word} size={30} /></div>}
           </div>
+          <BadgeChips round={{ status: solo!.status, duration_ms: solo!.duration_ms, patterns: guesses.map((g) => g.pattern), guesses }} />
           {showTalk ? (
             <TrashTalk game={solo!} slot={slot!} players={players} onGame={setSolo} variant="dock" solo />
           ) : (

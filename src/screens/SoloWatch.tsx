@@ -2,6 +2,7 @@
 // what they're typing, their clock, the word, and the same trash talk dock as
 // spectating a battle (emojis burst over their board, messages pop up).
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { BadgeChips } from '../components/Badges';
 import { Board, REVEAL_MS } from '../components/Board';
 import { Icon } from '../components/Icon';
 import { SoloElapsed } from '../components/Live';
@@ -125,10 +126,13 @@ export function SoloWatchScreen({ id }: { id: string }) {
         active={live !== null && reveal === null} label={`${player.name}'s guesses`} />
       <TrashTalk game={solo} slot={slot} players={players} onGame={setSolo} variant="dock" solo />
       {done && (
+        <>
+        <BadgeChips round={{ status: solo.status, duration_ms: solo.duration_ms, patterns: solo.guesses.map((g) => g.pattern), guesses: solo.guesses }} label={`${player.name}'s badges`} />
         <div className="solo-watch-done">
           <button className="btn ghost" onClick={() => go('/', true)}>Back home</button>
           {next && <button className="btn primary" onClick={() => go(`/solo/watch/${next.id}`, true)}>Watch the next one</button>}
         </div>
+        </>
       )}
     </div>
   );

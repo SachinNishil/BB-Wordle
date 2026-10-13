@@ -1,3 +1,4 @@
+import { MilestoneToasts } from './components/Badges';
 import { Toasts } from './components/Toasts';
 import { TauntLayer } from './components/TrashTalk';
 import { isConfigured } from './lib/config';
@@ -44,6 +45,7 @@ export function App() {
       </div>
       <Toasts />
       <TauntLayer />
+      <MilestoneToasts />
     </StoreProvider>
   );
 }

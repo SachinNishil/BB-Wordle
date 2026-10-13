@@ -113,6 +113,7 @@ export const api = {
     call<SoloOne>('solo_taunt', { ...K, p_slot: slot, p_id: id, p_body: body, p_kind: kind }),
   soloPause: (slot: Slot, id: string) => call<SoloOne>('solo_pause', { ...K, p_slot: slot, p_id: id }),
   soloResume: (slot: Slot, id: string) => call<SoloOne>('solo_resume', { ...K, p_slot: slot, p_id: id }),
+  soloHistory: (limit = 1000) => call<SoloView[]>('solo_history', { ...K, p_limit: limit }),
   soloStats: () => call<SoloStats[]>('solo_stats', K),
   seen: (slot: Slot) => call<boolean>('seen', { ...K, p_slot: slot }),
 };

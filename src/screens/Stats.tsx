@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Avatar } from '../components/Avatar';
+import { BadgeShelf } from '../components/Badges';
 import { TopBar } from '../components/TopBar';
 import { fmtDuration } from '../lib/clock';
 import { awards, headToHead, playerStats, type PlayerStats } from '../lib/stats';
@@ -239,6 +240,9 @@ export function StatsScreen() {
           </div>
         </section>
       )}
+
+      {/* v1.15: badges, after the Hall of fame. */}
+      <BadgeShelf />
     </div>
   );
 }

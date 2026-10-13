@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Avatar } from '../components/Avatar';
 import { Board, REVEAL_MS } from '../components/Board';
+import { BadgeChips } from '../components/Badges';
 import { Countdown } from '../components/Countdown';
 import { Icon } from '../components/Icon';
 import { Keyboard } from '../components/Keyboard';
@@ -721,6 +722,7 @@ export function GameScreen({ id }: { id?: string }) {
               </div>
             )}
           </div>
+          <BadgeChips round={{ status: game.me.status, duration_ms: game.me.duration_ms, patterns: game.me.guesses.map((g) => g.pattern), guesses: game.me.guesses }} />
           <p className="finished-wait">
             <span className="loader small" aria-hidden="true" />
             {game.partner.status === 'playing'
