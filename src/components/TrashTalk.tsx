@@ -170,8 +170,8 @@ export function TrashTalk<T extends Talk>({ game, slot, players, onGame, variant
   const last = taunts[taunts.length - 1];
   const lastMine = last && last.from === slot ? last : null;
   const logRef = useRef<HTMLDivElement>(null);
-  // v1.12: keep the phone keyboard (and the cursor) up between messages. Tapping a
-  // button would normally take the focus off the box and close the keyboard.
+  // v1.12: keep the phone keyboard (and the cursor) up between typed messages: the Send
+  // button doesn't take the focus off the box.
   const inputRef = useRef<HTMLInputElement>(null);
   const keepFocus = (e: { preventDefault: () => void }) => {
     if (document.activeElement === inputRef.current) e.preventDefault();
@@ -182,10 +182,12 @@ export function TrashTalk<T extends Talk>({ game, slot, players, onGame, variant
     if (el) el.scrollTop = el.scrollHeight;
   }, [taunts.length]);
 
-  async function send(body: string) {
+  // v1.13: only a typed message keeps the keyboard up. Emojis and quick lines never
+  // bring it up (tapping them while it's open lets it close).
+  async function send(body: string, typed = false) {
     const b = body.trim();
     if (!b || sending) return;
-    const typing = document.activeElement === inputRef.current;
+    const typing = typed && document.activeElement === inputRef.current;
     setSending(true);
     try {
       const r = await sendTalk(slot, game, solo, b.slice(0, TAUNT_MAX), 'chat');
@@ -233,22 +235,22 @@ export function TrashTalk<T extends Talk>({ game, slot, players, onGame, variant
       {variant !== 'dock' && recent.length === 0 && <p className="muted small">No trash talk this game. Yet.</p>}
       <div className="trash-emojis" role="group" aria-label="Send an emoji">
         {TAUNT_EMOJIS.map((e) => (
-          <button key={e} type="button" className="trash-emoji" onMouseDown={keepFocus} onClick={() => send(e)} disabled={sending} aria-label={`Send ${e}`}>{e}</button>
+          <button key={e} type="button" className="trash-emoji" onClick={() => send(e)} disabled={sending} aria-label={`Send ${e}`}>{e}</button>
         ))}
       </div>
       {showLines && (
         <div className="trash-lines" role="group" aria-label="Quick lines">
           {TAUNT_LINES.map((l) => (
-            <button key={l} type="button" className="trash-line" onMouseDown={keepFocus} onClick={() => send(l)} disabled={sending}>{l}</button>
+            <button key={l} type="button" className="trash-line" onClick={() => send(l)} disabled={sending}>{l}</button>
           ))}
         </div>
       )}
-      {<form className="trash-compose" onSubmit={(e) => { e.preventDefault(); void send(text); }}>
-        <button type="button" className={`trash-more${showLines ? ' on' : ''}`} onMouseDown={keepFocus} onClick={() => setShowLines((x) => !x)}
+      {<form className="trash-compose" onSubmit={(e) => { e.preventDefault(); void send(text, true); }}>
+        <button type="button" className={`trash-more${showLines ? ' on' : ''}`} onClick={() => setShowLines((x) => !x)}
           aria-label="Quick lines" aria-expanded={showLines}>💬</button>
         {/* Enter is handled here, not as a form submit: on iPhones a submit closes the keyboard. */}
         <input ref={inputRef} className="text-input trash-input" value={text} maxLength={TAUNT_MAX} onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void send(text); } }}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void send(text, true); } }}
           placeholder={`Say something to ${partner.name}…`} aria-label="Trash talk message" enterKeyHint="send" />
         <button type="submit" className="trash-send" onMouseDown={keepFocus} disabled={sending || !text.trim()} aria-label="Send">
           <Icon name="send" size={18} />

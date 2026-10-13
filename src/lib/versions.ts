@@ -9,6 +9,14 @@ export interface Release {
 
 export const VERSIONS: Release[] = [
   {
+    version: '1.13.0',
+    date: '2026-10-12',
+    changes: [
+      'Spectating: the answer is face down (? tiles) until you tap it, so you can try to solve it in your head while you watch. Tap again to hide it. Watching a solo game works the same way until it\'s over.',
+      'Tapping an emoji or a quick line no longer brings up the phone keyboard. It only opens when you tap the message box, and stays up while you send typed messages.',
+    ],
+  },
+  {
     version: '1.12.0',
     date: '2026-10-12',
     changes: [

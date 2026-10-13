@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Board, REVEAL_MS } from '../components/Board';
 import { Icon } from '../components/Icon';
 import { SoloElapsed } from '../components/Live';
-import { WordTiles } from '../components/Tiles';
+import { HiddenWord, WordTiles } from '../components/Tiles';
 import { TrashTalk, useFeedTaunts } from '../components/TrashTalk';
 import { api } from '../lib/api';
 import { serverNow } from '../lib/clock';
@@ -18,6 +18,7 @@ export function SoloWatchScreen({ id }: { id: string }) {
   const [solo, setSolo] = useState<SoloView | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [reveal, setReveal] = useState<number | null>(null);
+  const [showWord, setShowWord] = useState(false);
 
   const reload = useCallback(async () => {
     if (!slot) return;
@@ -117,7 +118,8 @@ export function SoloWatchScreen({ id }: { id: string }) {
         ) : (
           <span>Solo · guess {Math.min(row + 1, 6)}/6 · hunting for</span>
         )}
-        {solo.word && <WordTiles word={solo.word} size={22} />}
+        {/* v1.13: face down until tapped while they play; shown once it's over. */}
+        {solo.word && (done ? <WordTiles word={solo.word} size={22} /> : <HiddenWord word={solo.word} shown={showWord} onToggle={() => setShowWord((x) => !x)} />)}
       </div>
       <Board guesses={solo.guesses} current={live ?? ''} revealRow={reveal} shake={false} bounceRow={null}
         active={live !== null && reveal === null} label={`${player.name}'s guesses`} />

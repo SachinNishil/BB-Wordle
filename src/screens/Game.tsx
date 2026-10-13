@@ -6,7 +6,7 @@ import { Icon } from '../components/Icon';
 import { Keyboard } from '../components/Keyboard';
 import { Elapsed, PartnerMini, SideCard, WatchingEye } from '../components/Live';
 import { fromGameView, ResultsView } from '../components/Results';
-import { WordTiles } from '../components/Tiles';
+import { HiddenWord, WordTiles } from '../components/Tiles';
 import { Soundboard, TrashTalk, useFeedTaunts } from '../components/TrashTalk';
 import { api, ApiError } from '../lib/api';
 import { serverNow } from '../lib/clock';
@@ -54,6 +54,7 @@ export function GameScreen({ id }: { id?: string }) {
   const prevPartner = useRef<string | null>(null);
   // Spectator mode (v1.4): once my round is over, watch my partner's board.
   const [watch, setWatch] = useState<'partner' | 'mine' | null>(null);
+  const [showWord, setShowWord] = useState(false);
   const [partnerReveal, setPartnerReveal] = useState<number | null>(null);
   const sawPlaying = useRef(false);
   const prevPartnerCount = useRef<number | null>(null);
@@ -647,13 +648,16 @@ export function GameScreen({ id }: { id?: string }) {
             notStarted ? <span>{partner.name} hasn't started yet. Warm up the trash talk.</span> : (
               <>
                 <span>{game.mode === 'challenge' ? 'Hunting for your word' : 'Hunting for'}</span>
-                {theirWord && <WordTiles word={theirWord} size={22} />}
+                {/* v1.13: face down until tapped, except the word I picked for them myself. */}
+                {theirWord && (game.mode === 'challenge'
+                  ? <WordTiles word={theirWord} size={22} />
+                  : <HiddenWord word={theirWord} shown={showWord} onToggle={() => setShowWord((x) => !x)} />)}
               </>
             )
           ) : (
             <>
               <span>{game.me.status === 'solved' ? `You solved it in ${game.me.guess_count}` : game.me.gave_up ? 'You gave up' : 'Out of guesses'} · <Elapsed startedAt={game.me.started_at} durationMs={game.me.duration_ms} /></span>
-              {game.answer && <WordTiles word={game.answer} size={22} />}
+              {game.answer && <HiddenWord word={game.answer} shown={showWord} onToggle={() => setShowWord((x) => !x)} />}
             </>
           )}
         </div>

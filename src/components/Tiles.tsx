@@ -14,6 +14,26 @@ export function WordTiles({ word, pattern, size = 34, animate = false }: { word:
   );
 }
 
+/**
+ * v1.13: the answer while spectating, face down until tapped, so the watcher can
+ * try to solve it in their head. Tap again to hide it.
+ */
+export function HiddenWord({ word, size = 22, shown, onToggle }: { word: string; size?: number; shown: boolean; onToggle: () => void }) {
+  return (
+    <button type="button" className={`hidden-word${shown ? ' shown' : ''}`} onClick={onToggle}
+      aria-label={shown ? `The word is ${word}. Tap to hide it` : 'Tap to see the word'} aria-pressed={shown}>
+      <span className="wordtiles" aria-hidden="true">
+        {[...word].map((l, i) => (
+          <span key={i} className={`mtile ${shown ? 'correct' : 'face-down'}`} style={{ width: size, height: size, fontSize: size * 0.55 }}>
+            {shown ? l : '?'}
+          </span>
+        ))}
+      </span>
+      {!shown && <span className="hidden-word-hint">tap to see</span>}
+    </button>
+  );
+}
+
 /** Colour-only grid: for a partner's progress (no letters) and result boards. */
 export function MiniGrid({ patterns, rows = 6, cell = 9, gap = 2, showEmpty = true }: {
   patterns: string[]; rows?: number; cell?: number; gap?: number; showEmpty?: boolean;
