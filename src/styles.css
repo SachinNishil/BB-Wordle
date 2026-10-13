@@ -699,8 +699,8 @@ textarea { resize: vertical; min-height: 120px; font-family: ui-monospace, SFMon
 .taunt-layer {
   position: fixed; left: 0; right: 0; top: calc(var(--safe-top) + 62px); z-index: 30; pointer-events: none;
   display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 0 16px;
-  /* v1.6.1: never reach below the board's first row (the app sets the exact height). */
-  max-height: 300px; overflow: hidden;
+  /* v1.14: nothing is clipped (emojis were cut in half); the app shows fewer messages instead. */
+  overflow: visible;
 }
 .taunt-bubble {
   display: inline-flex; align-items: center; gap: 8px; max-width: min(92vw, 420px); padding: 9px 14px 9px 9px; border-radius: 18px;
@@ -714,7 +714,8 @@ textarea { resize: vertical; min-height: 120px; font-family: ui-monospace, SFMon
   display: inline-block; animation: taunt-float 1600ms cubic-bezier(.2, .9, .3, 1);
   transition: opacity 380ms ease, transform 380ms ease;
 }
-.taunt-emoji-wrap { display: block; }
+.taunt-emoji-row { display: flex; justify-content: center; align-items: center; gap: 4px; padding: 6px 4px 10px; }
+.taunt-emoji-wrap { display: block; padding: 4px; }
 /* v1.6.1: the resting state is always visible; going away is a class the app
    adds (so iPhones with Reduce Motion, which skip animations, still see them). */
 .taunt-bubble.leaving { opacity: 0; transform: translateY(-10px); }
@@ -810,6 +811,7 @@ textarea { resize: vertical; min-height: 120px; font-family: ui-monospace, SFMon
 
 /* --------------------------------------------------------------- soundboard (v1.9) */
 .soundboard {
+  position: relative; z-index: 6; /* v1.14: its rising emojis go over the top bar, not under it */
   min-width: 0; background: var(--surface); border-radius: 16px; box-shadow: var(--shadow); padding: 6px;
   display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; align-content: center;
 }
@@ -818,7 +820,8 @@ textarea { resize: vertical; min-height: 120px; font-family: ui-monospace, SFMon
   display: grid; place-items: center; touch-action: manipulation; transition: transform 70ms ease;
 }
 .sb-key:active { transform: scale(0.88); background: var(--surface-3); }
-.sb-pop { position: absolute; left: 50%; top: 0; pointer-events: none; font-size: 1.4rem; animation: sb-pop 700ms ease-out forwards; }
+/* v1.14: above the top bar, which used to hide the top of the rising emoji. */
+.sb-pop { position: absolute; left: 50%; top: 0; z-index: 20; pointer-events: none; font-size: 1.4rem; line-height: 1.2; animation: sb-pop 700ms ease-out forwards; }
 @keyframes sb-pop { from { transform: translate(-50%, 0) scale(1); opacity: 1; } to { transform: translate(-50%, -46px) scale(1.4); opacity: 0; } }
 html.boom-shake .screen { animation: boom-shake 380ms cubic-bezier(.36, .07, .19, .97); }
 @keyframes boom-shake {

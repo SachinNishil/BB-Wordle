@@ -9,6 +9,22 @@ export interface Release {
 
 export const VERSIONS: Release[] = [
   {
+    version: '1.14.1',
+    date: '2026-10-13',
+    changes: [
+      'Posting your status on Android no longer leaves the page at the bottom either, even when the keyboard takes a moment to close.',
+    ],
+  },
+  {
+    version: '1.14.0',
+    date: '2026-10-13',
+    changes: [
+      'Emojis that pop up over the board and from the soundboard now show in full. They used to get cut off at the edges or hidden behind the top bar.',
+      'Several emojis at once now line up side by side instead of stacking down the screen.',
+      'Posting or editing your status on Home no longer leaves the page scrolled to the bottom.',
+    ],
+  },
+  {
     version: '1.13.0',
     date: '2026-10-12',
     changes: [

@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from 'react';
+import { useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { Avatar } from '../components/Avatar';
 import { Icon } from '../components/Icon';
 import { InstallHint } from '../components/InstallHint';
@@ -185,7 +185,33 @@ export function lastSeenText(at: number) {
  *  speech bubbles from your photos, and tap your own photo to say something. */
 function Couple({ me, partner }: { me: Player; partner: Player }) {
   const { slot, partnerOnline, partnerLastSeen, setPlayers, ping, reportError, toast } = useStore();
-  const [open, setOpen] = useState(false);
+  const [open, setOpenState] = useState(false);
+  // v1.14: the phone keyboard scrolls the page to reach the box; put the page back
+  // where it was when the box closes (it used to end up at the bottom).
+  const savedY = useRef(0);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const setOpen = (v: boolean) => {
+    if (v) savedY.current = window.scrollY;
+    setOpenState(v);
+    if (!v) {
+      const y = savedY.current;
+      const back = () => window.scrollTo({ top: y, behavior: 'instant' as ScrollBehavior });
+      requestAnimationFrame(back);
+      setTimeout(back, 350); // again once the keyboard has gone
+      // v1.14.1: Android keyboards can take longer to close and resize the page as they
+      // go, so for the next second put it back after every resize as well.
+      const vv = window.visualViewport;
+      if (vv) {
+        vv.addEventListener('resize', back);
+        setTimeout(() => vv.removeEventListener('resize', back), 1200);
+      }
+      setTimeout(back, 800);
+    }
+  };
+  // Focus in the same tap that opened it (iPhones only raise the keyboard then).
+  useLayoutEffect(() => {
+    if (open) inputRef.current?.focus({ preventScroll: true });
+  }, [open]);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -250,7 +276,7 @@ function Couple({ me, partner }: { me: Player; partner: Player }) {
             onClick={(e) => e.stopPropagation()} onSubmit={(e) => { e.preventDefault(); void save(text); }}>
             <h3>{me.status_text ? 'Edit your message' : `Say something to ${partner.name}`}</h3>
             <p className="muted small">It shows as a speech bubble from your photo on {partner.name}'s home screen, for a day.</p>
-            <input className="text-input" value={text} maxLength={STATUS_MAX} autoFocus onChange={(e) => setText(e.target.value)}
+            <input ref={inputRef} className="text-input" value={text} maxLength={STATUS_MAX} onChange={(e) => setText(e.target.value)}
               placeholder="Rematch tonight? 😏" aria-label="Your message" enterKeyHint="send" />
             <div className="trash-lines wrap">
               {STATUS_IDEAS.map((i) => <button type="button" key={i} className="trash-line" onClick={() => setText(i)}>{i}</button>)}

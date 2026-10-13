@@ -310,14 +310,15 @@ export function TauntLayer() {
   const { slot, players, ping } = useStore();
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
   const layer = useRef<HTMLDivElement>(null);
-  // Never lower than the bottom of the board's first row (on the game screen).
+  // v1.14: no clipping any more (it cut emojis in half). Instead the space above the
+  // board's first row decides how many messages fit: two if there's room, else one.
+  const [room, setRoom] = useState(260);
   useLayoutEffect(() => {
     const el = layer.current;
     if (!el) return;
     const row = document.querySelector('.board .row');
-    const room = row ? row.getBoundingClientRect().bottom - el.getBoundingClientRect().top : 260;
-    el.style.maxHeight = `${Math.max(70, Math.round(room))}px`;
-  }, [bubbles]);
+    setRoom(row ? row.getBoundingClientRect().bottom - el.getBoundingClientRect().top : 260);
+  }, [bubbles.length]);
   const partner = slot ? players[(3 - slot) as Slot] : null;
   const slotRef = useRef(slot);
   slotRef.current = slot;
@@ -363,19 +364,25 @@ export function TauntLayer() {
   );
 
   if (!bubbles.length || !partner) return null;
+  const emojis = bubbles.filter((b) => b.emoji);
+  const texts = bubbles.filter((b) => !b.emoji).slice(emojis.length ? (room < 190 ? -1 : -2) : room < 120 ? -1 : -2);
   return (
     <div className="taunt-layer" aria-live="polite" ref={layer}>
-      {bubbles.map((b) =>
-        b.emoji ? (
-          <span key={b.id} className="taunt-emoji-wrap" style={{ transform: `translateX(${b.x}vw)` }}>
-            <span className={`taunt-emoji${b.leaving ? ' leaving' : ''}`}>{b.body}</span>
-          </span>
-        ) : (
-          <span key={b.id} className={`taunt-bubble${b.leaving ? ' leaving' : ''}`}>
-            <Avatar player={partner} size={22} />
-            <span><b>{partner.name}:</b> {b.body}</span>
-          </span>
-        ),
+      {texts.map((b) => (
+        <span key={b.id} className={`taunt-bubble${b.leaving ? ' leaving' : ''}`}>
+          <Avatar player={partner} size={22} />
+          <span><b>{partner.name}:</b> {b.body}</span>
+        </span>
+      ))}
+      {/* Emojis side by side in one row, so the whole of each one always shows. */}
+      {emojis.length > 0 && (
+        <span className="taunt-emoji-row">
+          {emojis.map((b) => (
+            <span key={b.id} className="taunt-emoji-wrap" style={{ transform: `translateY(${Math.round(b.x / 4)}px)` }}>
+              <span className={`taunt-emoji${b.leaving ? ' leaving' : ''}`}>{b.body}</span>
+            </span>
+          ))}
+        </span>
       )}
     </div>
   );
