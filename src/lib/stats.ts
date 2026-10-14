@@ -1,5 +1,6 @@
 // Every statistic in the app, computed from completed games. Pure functions.
-import type { GameMode, HistoryGame, HistoryPlayer, Slot, SoloStats } from './types';
+import { roundBadges, roundsFor } from './badges';
+import type { GameMode, HistoryGame, HistoryPlayer, Slot, SoloStats, SoloView } from './types';
 
 /** A failed round counts as 7 guesses for difficulty averages. */
 export const FAIL_SCORE = 7;
@@ -189,7 +190,7 @@ function leader(values: Record<Slot, number | null>, higherIsBetter: boolean): S
   return (higherIsBetter ? a > b : a < b) ? 1 : 2;
 }
 
-export function awards(games: HistoryGame[], names: Record<Slot, string>, fmtMs: (ms: number) => string, solo: SoloStats[] = []): Award[] {
+export function awards(games: HistoryGame[], names: Record<Slot, string>, fmtMs: (ms: number) => string, solo: SoloStats[] = [], soloGames: SoloView[] = []): Award[] {
   const out: Award[] = [];
   const diffs = wordDifficulties(games);
   if (diffs.length) {
@@ -220,13 +221,7 @@ export function awards(games: HistoryGame[], names: Record<Slot, string>, fmtMs:
       value: clutchLeader ? names[clutchLeader] : 'Tied',
       detail: `Wins after reaching guess 5 or 6 · ${names[1]} ${clutch[1]}, ${names[2]} ${clutch[2]}` });
   }
-  const speed = { 1: playerStats(games, 1).avgSolveMs, 2: playerStats(games, 2).avgSolveMs };
-  const speedLeader = leader(speed, false);
-  if (speed[1] != null || speed[2] != null) {
-    out.push({ id: 'speed', emoji: '⚡', title: 'Speed Demon', holder: speedLeader,
-      value: speedLeader ? names[speedLeader] : 'Tied',
-      detail: `Fastest average solve · ${names[1]} ${speed[1] != null ? fmtMs(speed[1]) : '–'}, ${names[2]} ${speed[2] != null ? fmtMs(speed[2]) : '–'}` });
-  }
+  // v1.16: Speed Demon (average solve time) dropped: the Stats table already shows it.
   if (comeback[1] + comeback[2] > 0) {
     const c = leader(comeback, true);
     out.push({ id: 'comeback', emoji: '👑', title: 'Comeback King', holder: c, value: c ? names[c] : 'Tied',
@@ -252,7 +247,7 @@ export function awards(games: HistoryGame[], names: Record<Slot, string>, fmtMs:
     if (n) out.push({ id: `nemesis-${slot}`, emoji: '🎯', title: `${names[slot]}'s Nemesis Letter`, holder: slot, value: n.letter,
       detail: `Guessed and missed ${n.count} time${n.count === 1 ? '' : 's'}` });
   }
-  out.push(...moreAwards(games, names, fmtMs, solo));
+  out.push(...moreAwards(games, names, fmtMs, solo, soloGames));
   return out;
 }
 
@@ -260,7 +255,7 @@ const both = (f: (s: Slot) => number) => ({ 1: f(1), 2: f(2) }) as Record<Slot, 
 const tally = (names: Record<Slot, string>, v: Record<Slot, number | string>) => `${names[1]} ${v[1]}, ${names[2]} ${v[2]}`;
 
 /** v1.12: more of the Hall of fame. Each one only shows once there's something to show. */
-export function moreAwards(games: HistoryGame[], names: Record<Slot, string>, fmtMs: (ms: number) => string, solo: SoloStats[] = []): Award[] {
+export function moreAwards(games: HistoryGame[], names: Record<Slot, string>, fmtMs: (ms: number) => string, _solo: SoloStats[] = [], soloGames: SoloView[] = []): Award[] {
   const out: Award[] = [];
   const rounds = (slot: Slot) => games.map((g) => player(g, slot)).filter((p): p is HistoryPlayer => !!p);
   const pick = (id: string, emoji: string, title: string, v: Record<Slot, number>, higher: boolean, detail: string) => {
@@ -281,10 +276,6 @@ export function moreAwards(games: HistoryGame[], names: Record<Slot, string>, fm
   if (fastest) out.push({ id: 'rocket', emoji: '🚀', title: 'Fastest Solve Ever', holder: fastest.slot, value: fmtMs(fastest.ms),
     detail: `${names[fastest.slot]} on ${fastest.word} · game #${fastest.n}` });
 
-  // Unstoppable: the longest run of battles won.
-  const run = both((s) => playerStats(games, s).longestWinStreak);
-  if (Math.max(run[1], run[2]) > 1) pick('unstoppable', '🔥', 'Unstoppable', run, true, `Longest win streak · ${tally(names, run)}`);
-
   // Photo finish: same guesses, decided by the clock, smallest gap.
   let photo: { gap: number; g: HistoryGame } | null = null;
   for (const g of games) {
@@ -296,10 +287,6 @@ export function moreAwards(games: HistoryGame[], names: Record<Slot, string>, fm
   }
   if (photo) out.push({ id: 'photo', emoji: '📸', title: 'Photo Finish', holder: photo.g.winner, value: fmtMs(photo.gap),
     detail: `Closest clock decider · game #${photo.g.number}, ${names[photo.g.winner!]} by a whisker` });
-
-  // Last gasp: solved on the sixth and final guess.
-  const gasp = both((s) => rounds(s).filter((p) => p.status === 'solved' && p.guess_count === 6).length);
-  if (gasp[1] + gasp[2] > 0) pick('gasp', '😮‍💨', 'Last Gasp', gasp, true, `Solved on guess 6 · ${tally(names, gasp)}`);
 
   // Best opener: most greens and yellows from the first guess, on average.
   const open = { 1: null, 2: null } as Record<Slot, number | null>;
@@ -331,15 +318,27 @@ export function moreAwards(games: HistoryGame[], names: Record<Slot, string>, fm
   const flag = both((s) => rounds(s).filter((p) => p.gave_up).length);
   if (flag[1] + flag[2] > 0) pick('flag', '🏳️', 'White Flag', flag, true, `Rounds given up · ${tally(names, flag)}`);
 
-  // Solo: who plays the most, and the fastest solo solve.
-  const so = (s: Slot) => solo.find((r) => r.slot === s);
-  const played = both((s) => so(s)?.played ?? 0);
-  if (played[1] + played[2] > 0) pick('grinder', '🧘', 'Solo Grinder', played, true, `Solo games played · ${tally(names, played)}`);
-  const best = { 1: so(1)?.best_ms ?? null, 2: so(2)?.best_ms ?? null } as Record<Slot, number | null>;
-  if (best[1] != null || best[2] != null) {
-    const l = leader(best, false);
-    out.push({ id: 'speedrun', emoji: '🏃', title: 'Solo Speedrun', holder: l, value: l ? fmtMs(best[l]!) : 'Tied',
-      detail: `Fastest solo solve · ${names[1]} ${best[1] != null ? fmtMs(best[1]) : '–'}, ${names[2]} ${best[2] != null ? fmtMs(best[2]) : '–'}` });
-  }
+  // v1.16: the badge totals, battles and solo together (the rounds themselves show a chip).
+  const badgeCount = (id: string) => both((sl) => roundsFor(sl, games, soloGames).filter((r) => roundBadges(r).includes(id)).length);
+  const sea = badgeCount('sea');
+  if (sea[1] + sea[2] > 0) pick('sea', '🟩', 'Sea of Greens', sea, true, `Solved without a single yellow · ${tally(names, sea)}`);
+  const hard = badgeCount('hard');
+  if (hard[1] + hard[2] > 0) pick('hard', '🧠', 'Hard Mode Hero', hard, true, `Solved reusing every hint · ${tally(names, hard)}`);
+  const dark = badgeCount('dark');
+  if (dark[1] + dark[2] > 0) pick('dark', '🔦', 'Out of the Dark', dark, true, `Solved after two all-grey guesses · ${tally(names, dark)}`);
+
+  // Insights about the two of you (no winner).
+  const dayKey = (iso: string) => { const d = new Date(iso); return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86400000; };
+  const days = [...new Set(games.map((g) => dayKey(g.completed_at)))].sort((a, b) => a - b);
+  let run = 0, best = 0;
+  for (let i = 0; i < days.length; i++) { run = i > 0 && days[i] === days[i - 1] + 1 ? run + 1 : 1; best = Math.max(best, run); }
+  if (best > 1) out.push({ id: 'devotion', emoji: '📅', title: 'Daily Devotion', holder: null, value: `${best} days`,
+    detail: `Your longest run of days with a battle${run === best && days.length ? ', still going' : ''}` });
+  const perDay = new Map<number, number>();
+  for (const g of games) perDay.set(dayKey(g.completed_at), (perDay.get(dayKey(g.completed_at)) ?? 0) + 1);
+  let busy: [number, number] | null = null;
+  for (const e of perDay) if (!busy || e[1] > busy[1]) busy = e;
+  if (busy && busy[1] > 1) out.push({ id: 'busiest', emoji: '🗓️', title: 'Busiest Day', holder: null, value: `${busy[1]} battles`,
+    detail: new Date(busy[0] * 86400000).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }) });
   return out;
 }

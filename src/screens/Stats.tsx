@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Avatar } from '../components/Avatar';
-import { BadgeShelf } from '../components/Badges';
 import { TopBar } from '../components/TopBar';
 import { fmtDuration } from '../lib/clock';
 import { awards, headToHead, playerStats, type PlayerStats } from '../lib/stats';
@@ -88,7 +87,7 @@ const NOTES: Record<Mode, string> = {
 };
 
 export function StatsScreen() {
-  const { history, players, refreshHistory } = useStore();
+  const { history, soloHistory, players, refreshHistory } = useStore();
   const [distFor, setDistFor] = useState<Slot>(1);
   const [solo, setSolo] = useState<SoloStats[] | null>(null);
   // v1.12: one table for all three modes, switched with the toggle (remembered on this phone).
@@ -107,7 +106,7 @@ export function StatsScreen() {
     return { classic: st(of('classic')), challenge: st(of('challenge')) };
   }, [games]);
   const names = { 1: players[1].name, 2: players[2].name };
-  const fun = useMemo(() => awards(games, names, fmtDuration, solo ?? []), [games, solo, names[1], names[2]]); // eslint-disable-line
+  const fun = useMemo(() => awards(games, names, fmtDuration, solo ?? [], soloHistory ?? []), [games, solo, soloHistory, names[1], names[2]]); // eslint-disable-line
 
   if (history === null) {
     return (
@@ -240,9 +239,6 @@ export function StatsScreen() {
           </div>
         </section>
       )}
-
-      {/* v1.15: badges, after the Hall of fame. */}
-      <BadgeShelf />
     </div>
   );
 }

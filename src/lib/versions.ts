@@ -9,6 +9,16 @@ export interface Release {
 
 export const VERSIONS: Release[] = [
   {
+    version: '1.16.0',
+    date: '2026-10-14',
+    changes: [
+      'Badges tidied up. The separate Badges section in Stats and the milestone pop-ups are gone: they mostly repeated the Stats table (streaks, games played).',
+      'Each round still shows a chip for the rare stuff: Wordle in 1, Wordle in 2, Sea of Greens, Hard Mode and Out of the Dark.',
+      'Hall of fame: new Sea of Greens, Hard Mode Hero and Out of the Dark awards (who has the most), plus two insights about the two of you: Daily Devotion (longest run of days with a battle) and Busiest Day.',
+      'Hall of fame: dropped Speed Demon, Unstoppable, Last Gasp, Solo Grinder and Solo Speedrun, which repeated the Stats table or another award.',
+    ],
+  },
+  {
     version: '1.15.0',
     date: '2026-10-13',
     changes: [

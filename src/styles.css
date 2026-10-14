@@ -938,25 +938,6 @@ html.boom-shake .screen { animation: boom-shake 380ms cubic-bezier(.36, .07, .19
   animation: pop-in 260ms ease both;
 }
 .board-card .badge-chips { margin-top: 8px; justify-content: flex-start; }
-.badge-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.badge, .milestone {
-  background: var(--surface); border-radius: var(--radius-sm); box-shadow: var(--shadow); padding: 12px; display: flex; flex-direction: column; gap: 2px;
-  opacity: 0.55; filter: grayscale(1);
-}
-.badge.got, .milestone.got { opacity: 1; filter: none; box-shadow: var(--shadow), inset 0 0 0 2px color-mix(in srgb, var(--yellow) 60%, transparent); }
-.badge-emoji { font-size: 1.5rem; line-height: 1.2; }
-.badge-name { font-weight: 800; font-size: 0.92rem; display: flex; align-items: baseline; gap: 6px; }
-.badge-count { font-size: 0.78rem; font-weight: 800; color: var(--ink-2); font-variant-numeric: tabular-nums; }
-.badge-how { font-size: 0.74rem; color: var(--ink-2); line-height: 1.3; }
-.milestones { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
-.milestone { flex-direction: row; align-items: flex-start; gap: 12px; opacity: 1; filter: none; }
-.milestone:not(.got) .badge-emoji { filter: grayscale(1); opacity: 0.55; }
-.milestone-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-.milestone-bar { display: block; height: 6px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
-.milestone-bar span { display: block; height: 100%; background: var(--green); border-radius: 999px; }
-.milestone-steps { display: flex; flex-wrap: wrap; gap: 4px; }
-.milestone-steps i { font-style: normal; font-size: 0.68rem; font-weight: 800; padding: 1px 6px; border-radius: 999px; background: var(--surface-2); color: var(--ink-3); font-variant-numeric: tabular-nums; }
-.milestone-steps i.on { background: var(--green); color: #fff; }
 
 /* --------------------------------------------------------------- desktop */
 @media (min-width: 700px) {
