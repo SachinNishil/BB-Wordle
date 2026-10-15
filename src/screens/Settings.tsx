@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Avatar } from '../components/Avatar';
 import { Icon } from '../components/Icon';
 import { TopBar } from '../components/TopBar';
-import { api } from '../lib/api';
+import { api, type TelegramStatus } from '../lib/api';
 import { APP_VERSION } from '../lib/config';
 import { photoToDataUrl } from '../lib/photo';
 import { getTheme, setTheme, type ThemeChoice } from '../lib/theme';
@@ -157,6 +157,75 @@ function ClassicWords() {
   );
 }
 
+/**
+ * Telegram invites (v1.17): a bot messages you when your partner starts a game,
+ * since phones don't let this app send its own notifications.
+ */
+function TelegramInvites() {
+  const { slot, partner, reportError, toast } = useStore();
+  const [st, setSt] = useState<TelegramStatus | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [opened, setOpened] = useState(false);
+  const load = async () => { if (slot) setSt(await api.telegramStatus(slot).catch(() => ({ configured: false }))); };
+  useEffect(() => { void load(); }, [slot]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function check() {
+    if (!slot) return;
+    setChecking(true);
+    try {
+      const { request_id } = await api.telegramCheck(slot);
+      let status = 'pending';
+      for (let i = 0; i < 8 && status === 'pending'; i++) {
+        await new Promise((r) => setTimeout(r, 1200));
+        status = (await api.telegramCheckResult(slot, request_id)).status;
+      }
+      if (status === 'connected') toast('Connected! Check Telegram for a hello 👋', 'win');
+      else if (status === 'not_found') toast('Not yet: open the bot, tap Start, then come back and Check.', 'info');
+      else toast("Couldn't reach Telegram. Try again in a moment.", 'error');
+      await load();
+    } catch (e) {
+      reportError(e);
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  async function disconnect() {
+    if (!slot) return;
+    try { await api.telegramDisconnect(slot); await load(); toast('Telegram invites turned off for this phone'); } catch (e) { reportError(e); }
+  }
+
+  if (!st) return null;
+  return (
+    <section className="card telegram">
+      <h3>Telegram invites</h3>
+      {!st.configured ? (
+        <p className="muted small">Get a Telegram message whenever {partner?.name ?? 'your partner'} starts a game. It needs a one-time setup in Supabase first (see the README, "Telegram invites").</p>
+      ) : st.me ? (
+        <>
+          <p className="small"><b>✓ Connected.</b> Telegram messages you whenever {partner?.name ?? 'your partner'} starts a game.</p>
+          <p className="muted small">{partner?.name}: {st.partner ? 'connected ✓' : 'not connected yet'}</p>
+          <button className="btn text small" onClick={disconnect}>Turn off</button>
+        </>
+      ) : (
+        <>
+          <p className="muted small">Get a Telegram message whenever {partner?.name ?? 'your partner'} starts a game.</p>
+          <ol className="telegram-steps small">
+            <li>
+              <a className="btn ghost small" href={st.link} target="_blank" rel="noreferrer" onClick={() => setOpened(true)}>Open @{st.bot} in Telegram</a>
+            </li>
+            <li>Tap <b>Start</b> there, then come back here.</li>
+            <li>
+              <button className={`btn small ${opened ? 'primary' : 'ghost'}`} onClick={check} disabled={checking}>{checking ? 'Checking…' : 'Check'}</button>
+            </li>
+          </ol>
+          <p className="muted small">{partner?.name}: {st.partner ? 'connected ✓' : 'not connected yet'}</p>
+        </>
+      )}
+    </section>
+  );
+}
+
 export function SettingsScreen() {
   const { slot, chooseSlot, players, toast, realtime } = useStore();
   const [theme, setThemeState] = useState<ThemeChoice>(getTheme());
@@ -178,6 +247,8 @@ export function SettingsScreen() {
       </section>
 
       <ClassicWords />
+
+      <TelegramInvites />
 
       <section className="card">
         <h3>Appearance</h3>

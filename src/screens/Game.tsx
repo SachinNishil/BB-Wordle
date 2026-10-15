@@ -59,6 +59,10 @@ export function GameScreen({ id }: { id?: string }) {
   const [partnerReveal, setPartnerReveal] = useState<number | null>(null);
   const sawPlaying = useRef(false);
   const prevPartnerCount = useRef<number | null>(null);
+  // v1.17: when a guess ends the whole game, finish the flip (and the bounce) before
+  // the results take over, for the player and for whoever is watching.
+  const [holdMine, setHoldMine] = useState(false);
+  const [holdPartner, setHoldPartner] = useState(false);
 
   const me = slot ? players[slot] : null;
   const partner = slot ? players[(3 - slot) as 1 | 2] : null;
@@ -191,8 +195,15 @@ export function GameScreen({ id }: { id?: string }) {
     if (prev === null || partnerCount === null || partnerCount !== prev + 1) return;
     setPartnerReveal(partnerCount - 1);
     const t = setTimeout(() => setPartnerReveal(null), REVEAL_MS);
-    return () => clearTimeout(t);
-  }, [partnerCount]);
+    let h: ReturnType<typeof setTimeout> | undefined;
+    if (game?.status === 'completed') {
+      setHoldPartner(true);
+      h = setTimeout(() => setHoldPartner(false), REVEAL_MS + 1100);
+    }
+    return () => { clearTimeout(t); if (h) clearTimeout(h); };
+  }, [partnerCount]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The render that first sees their final row comes before the effect above runs.
+  const partnerJustPlayed = prevPartnerCount.current !== null && partnerCount !== null && partnerCount === prevPartnerCount.current + 1;
 
   // Opening the game screen means "I'm here".
   useEffect(() => {
@@ -286,6 +297,10 @@ export function GameScreen({ id }: { id?: string }) {
       const r = await api.submitGuess(slot, game.id, word, row + 1);
       setTyped('');
       setRevealRow(row);
+      if (r.game?.status === 'completed') {
+        setHoldMine(true);
+        setTimeout(() => setHoldMine(false), REVEAL_MS + (r.pattern === 'GGGGG' ? 1300 : 1100));
+      }
       apply(r.game);
       const finished = r.game?.me.status === 'solved' || r.game?.me.status === 'failed';
       ping('game', finished ? 'finished' : 'guess');
@@ -468,7 +483,9 @@ export function GameScreen({ id }: { id?: string }) {
     );
   }
 
-  if (phase === 'results' && game) {
+  const holdingMine = phase === 'results' && holdMine;
+  const holdingSpectate = phase === 'results' && !holdMine && !!watch && (holdPartner || partnerJustPlayed);
+  if (phase === 'results' && game && !holdingMine && !holdingSpectate) {
     return (
       <div className="screen scroll">
         <header className="topbar">
@@ -604,7 +621,7 @@ export function GameScreen({ id }: { id?: string }) {
 
 
 
-  if (finishedNow && watch && slot) {
+  if ((finishedNow || holdingSpectate) && watch && slot) {
     const theirs = watch === 'partner';
     const pg = game.partner.guesses ?? [];
     const notStarted = game.partner.status === 'waiting' || game.partner.status === 'ready';

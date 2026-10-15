@@ -9,6 +9,14 @@ export interface Release {
 
 export const VERSIONS: Release[] = [
   {
+    version: '1.17.0',
+    date: '2026-10-15',
+    changes: [
+      'Telegram invites: connect in Settings and a Telegram bot messages you whenever your partner starts a game or challenges you, with a button that opens BB Wordle. Just that one message, nothing else.',
+      'When the last guess of a game is played, the row now flips all the way (and bounces if it\'s right) before the results appear. Same for whoever is watching.',
+    ],
+  },
+  {
     version: '1.16.0',
     date: '2026-10-14',
     changes: [

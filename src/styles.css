@@ -939,6 +939,10 @@ html.boom-shake .screen { animation: boom-shake 380ms cubic-bezier(.36, .07, .19
 }
 .board-card .badge-chips { margin-top: 8px; justify-content: flex-start; }
 
+/* --------------------------------------------------------------- telegram invites (v1.17) */
+.telegram-steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; }
+.telegram-steps .btn { display: inline-flex; }
+
 /* --------------------------------------------------------------- desktop */
 @media (min-width: 700px) {
   .screen { padding-top: calc(var(--safe-top) + 18px); }

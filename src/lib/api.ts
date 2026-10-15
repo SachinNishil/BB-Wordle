@@ -37,8 +37,11 @@ const FRIENDLY: Record<string, string> = {
   too_fast: 'Easy, easy. Give it a second.',
   dictionary_outdated: 'The word list needs updating. Run the new dictionary.sql in Supabase.',
   bad_status: 'Keep it to 80 characters.',
+  telegram_not_set_up: 'Telegram is not set up yet (see the README).',
+  telegram_unavailable: 'Turn on the pg_net extension in Supabase first (Database › Extensions).',
 };
 type SoloOne = { server_now: string; solo: SoloView };
+export interface TelegramStatus { configured: boolean; bot?: string; link?: string; me?: boolean; partner?: boolean }
 
 export function friendlyError(e: unknown): string {
   if (e instanceof ApiError) {
@@ -115,5 +118,11 @@ export const api = {
   soloResume: (slot: Slot, id: string) => call<SoloOne>('solo_resume', { ...K, p_slot: slot, p_id: id }),
   soloHistory: (limit = 1000) => call<SoloView[]>('solo_history', { ...K, p_limit: limit }),
   soloStats: () => call<SoloStats[]>('solo_stats', K),
+  // Telegram invites (v1.17)
+  telegramStatus: (slot: Slot) => call<TelegramStatus>('telegram_status', { ...K, p_slot: slot }),
+  telegramCheck: (slot: Slot) => call<{ request_id: number }>('telegram_check', { ...K, p_slot: slot }),
+  telegramCheckResult: (slot: Slot, requestId: number) =>
+    call<{ status: 'pending' | 'connected' | 'not_found' | 'error' }>('telegram_check_result', { ...K, p_slot: slot, p_request_id: requestId }),
+  telegramDisconnect: (slot: Slot) => call<boolean>('telegram_disconnect', { ...K, p_slot: slot }),
   seen: (slot: Slot) => call<boolean>('seen', { ...K, p_slot: slot }),
 };
