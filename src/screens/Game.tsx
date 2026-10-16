@@ -406,20 +406,6 @@ export function GameScreen({ id }: { id?: string }) {
     return () => window.removeEventListener('keydown', h);
   }, []);
 
-  async function playNow() {
-    if (!game || !slot) return;
-    setBusy(true);
-    try {
-      const s = await api.joinGame(slot, game.id, true);
-      apply(s.game);
-      ping('game', 'began');
-    } catch (e) {
-      reportError(e);
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function cancel() {
     if (!game || !slot) return;
     setBusy(true);
@@ -602,14 +588,20 @@ export function GameScreen({ id }: { id?: string }) {
           </div>
           <p className="eyebrow">{game.mode === 'challenge' ? "You're ready" : 'Waiting for player'}</p>
           <h2 className="waiting-title">Waiting for {partner.name}</h2>
+          {/* v1.18: both of you have to be in the app at the same time for it to start. */}
+          <div className="lobby-status" role="status">
+            <span className="lobby-chip on">✓ You're here</span>
+            <span className={`lobby-chip${game.partner.here && game.partner.joined_at ? ' on' : ''}`}>
+              {game.partner.here && game.partner.joined_at ? `✓ ${partner.name} is here` : `${partner.name} isn't here yet`}
+            </span>
+          </div>
           <p className="muted">
             {game.mode === 'challenge'
-              ? `The countdown starts the moment ${partner.name} taps Ready.`
-              : `The countdown starts the moment ${partner.name} joins. Not in the app? Send a nudge.`}
+              ? `The countdown starts when ${partner.name} taps Ready while you're both in the app.`
+              : `The countdown starts when you're both in the app at the same time. Keep this screen (or Home) open.`}
           </p>
           <div className="stack">
             <button className="btn soft" onClick={nudge}><Icon name="share" size={18} /> Send {partner.name} a nudge</button>
-            <button className="btn ghost" onClick={playNow} disabled={busy}>Play now, {partner.name} can join later</button>
             <button className="btn text" onClick={cancel} disabled={busy}>Cancel this game</button>
           </div>
         </div>

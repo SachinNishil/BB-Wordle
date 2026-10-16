@@ -118,11 +118,13 @@ function ActiveCard({ game, me, partner }: { game: GameView; me: Player; partner
   } else if (invitedMe) {
     eyebrow = 'Your turn to join';
     title = `${partner.name} started a game!`;
+    note = game.partner.here ? `${partner.name} is in the app, so it starts as soon as you join.` : `It starts when you're both in the app.`;
     cta = 'JOIN GAME';
   } else if (game.status === 'waiting') {
     eyebrow = 'Waiting for player';
     title = `Waiting for ${partner.name}`;
-    note = `${partner.name} will see it on opening the app.`;
+    // v1.18: it only counts down while you're both in the app.
+    note = game.partner.here ? `${partner.name} is here. Starting…` : `It starts when you're both in the app. Stay here or on the game.`;
   } else {
     if (challenge) eyebrow = 'Challenge ⚔️ · live';
     if (mineDone) {

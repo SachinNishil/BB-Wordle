@@ -943,6 +943,11 @@ html.boom-shake .screen { animation: boom-shake 380ms cubic-bezier(.36, .07, .19
 .telegram-steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; }
 .telegram-steps .btn { display: inline-flex; }
 
+/* --------------------------------------------------------------- lobby (v1.18) */
+.lobby-status { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 4px 0 2px; }
+.lobby-chip { padding: 5px 12px; border-radius: 999px; font-size: 0.82rem; font-weight: 800; background: var(--surface-2); color: var(--ink-3); }
+.lobby-chip.on { background: color-mix(in srgb, var(--green) 18%, var(--surface)); color: var(--green); }
+
 /* --------------------------------------------------------------- desktop */
 @media (min-width: 700px) {
   .screen { padding-top: calc(var(--safe-top) + 18px); }

@@ -9,6 +9,15 @@ export interface Release {
 
 export const VERSIONS: Release[] = [
   {
+    version: '1.18.0',
+    date: '2026-10-16',
+    changes: [
+      'A battle now only starts when you\'re both in the app at the same time. If one of you starts it and leaves, it waits (no more one person playing alone while the other isn\'t there).',
+      'The waiting screen shows who is here right now, and Home says so too. As soon as you\'re both in, the 3, 2, 1 starts and Home jumps straight to the game.',
+      '"Play now, join later" is gone, since games no longer start with only one of you.',
+    ],
+  },
+  {
     version: '1.17.0',
     date: '2026-10-15',
     changes: [

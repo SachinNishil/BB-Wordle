@@ -53,6 +53,8 @@ interface PlayerViewBase {
   duration_ms: number | null;
   guess_count: number;
   gave_up: boolean;
+  /** v1.18: in the app right now (checked in within the last few seconds). */
+  here?: boolean;
 }
 export interface MeView extends PlayerViewBase {
   guesses: GuessRow[];

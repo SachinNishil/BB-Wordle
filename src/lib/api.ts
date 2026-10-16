@@ -92,6 +92,8 @@ export const api = {
     call<GameState>('set_challenge_word', { ...K, p_slot: slot, p_game_id: gameId, p_word: word }),
   joinGame: (slot: Slot, gameId: string, playNow = false) =>
     call<GameState>('join_game', { ...K, p_slot: slot, p_game_id: gameId, p_play_now: playNow }),
+  lobby: (slot: Slot, gameId: string, here = true) =>
+    call<GameState>('lobby', { ...K, p_slot: slot, p_game_id: gameId, p_here: here }),
   beginRound: (slot: Slot, gameId: string) => call<GameState>('begin_round', { ...K, p_slot: slot, p_game_id: gameId }),
   submitGuess: (slot: Slot, gameId: string, guess: string, attempt: number) =>
     call<GuessResult>('submit_guess', { ...K, p_slot: slot, p_game_id: gameId, p_guess: guess, p_attempt: attempt }),

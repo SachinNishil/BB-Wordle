@@ -360,6 +360,38 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
   }, [refreshActive, refreshRoom, refreshSolo]);
 
+  // v1.18 lobby: a waiting game only counts down while you're both in the app. While
+  // I've joined and the app is open on Home or the game, check in every 4 s; say so
+  // when I leave. Once the countdown is set, Home jumps straight to the game.
+  const waitingId = active && active.status === 'waiting' && active.me.joined_at ? active.id : null;
+  const inLobbyScreen = screen === 'home' || screen === 'game';
+  useEffect(() => {
+    if (!slot || !waitingId || !inLobbyScreen) return;
+    let alive = true;
+    const checkIn = (here: boolean) =>
+      api.lobby(slot, waitingId, here).then((r) => {
+        if (!alive && here) return;
+        if (r.game) setActive(r.game);
+        if (r.game?.starts_at) ping('game', 'joined');
+      }).catch(() => {});
+    const tick = () => { if (document.visibilityState === 'visible') void checkIn(true); };
+    tick();
+    const t = setInterval(tick, 4000);
+    const vis = () => (document.visibilityState === 'visible' ? tick() : void checkIn(false));
+    document.addEventListener('visibilitychange', vis);
+    return () => {
+      alive = false;
+      clearInterval(t);
+      document.removeEventListener('visibilitychange', vis);
+      void checkIn(false);
+    };
+  }, [slot, waitingId, inLobbyScreen, setActive, ping]);
+  const startsAt = active?.starts_at;
+  useEffect(() => {
+    if (screen !== 'home' || !active || !startsAt || active.me.status !== 'ready') return;
+    if (Date.parse(startsAt) - serverNow() > -8000) go('/game');
+  }, [screen, startsAt, active?.me.status]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Re-check the online dot every 10 s (presence goes stale if a phone just vanishes).
   useEffect(() => {
     const t = setInterval(() => setTick((x) => x + 1), 10000);
