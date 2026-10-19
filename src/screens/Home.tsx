@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { Avatar } from '../components/Avatar';
 import { Icon } from '../components/Icon';
 import { InstallHint } from '../components/InstallHint';
-import { Elapsed, SoloElapsed } from '../components/Live';
+import { RoundElapsed, SoloElapsed } from '../components/Live';
 import { GameWords } from '../components/Tiles';
 import { api } from '../lib/api';
 import { APP_VERSION } from '../lib/versions';
@@ -24,6 +24,10 @@ export function historyLine(g: HistoryGame, players: Record<Slot, Player>) {
   if (g.result === 'both_failed') return { top: 'The word won', bottom: 'Nobody solved it' };
   const w = g.winner!;
   const l = (3 - w) as Slot;
+  // Endless (v1.19): the clock decides, so show the times.
+  if (g.mode === 'endless' && g.result === 'win') {
+    return { top: `🏆 ${players[w].name} · ${fmtDuration(p(w).duration_ms)} · ${score(w)}`, bottom: `${players[l].name} · ${p(l).status === 'solved' ? fmtDuration(p(l).duration_ms) : score(l)}` };
+  }
   if (onTime(g)) {
     return { top: `🏆 ${players[w].name} · ${score(w)} · ${fmtDuration(p(w).duration_ms)}`, bottom: `${players[l].name} · ${score(l)} · ${fmtDuration(p(l).duration_ms)}` };
   }
@@ -52,7 +56,8 @@ function GameCard() {
       const s = await api.startGame(slot, mode);
       setActive(s.game);
       ping('game', s.already_active ? 'joined' : mode === 'challenge' ? 'challenged' : 'started');
-      go('/game');
+      // v1.19: classic and endless wait right here on Home; a challenge needs its word picked first.
+      if (s.game?.status === 'setting') go('/game');
     } catch (e) {
       reportError(e);
     } finally {
@@ -86,6 +91,12 @@ function GameCard() {
           </button>
           <p className="mode-note">You pick a word for {partner.name}, {partner.name} picks one for you.</p>
         </div>
+        <div className="mode-choice">
+          <button className="btn ghost big endless-btn" onClick={() => start('endless')} disabled={!!starting}>
+            {starting === 'endless' ? 'Picking a word…' : <>♾️ ENDLESS RACE</>}
+          </button>
+          <p className="mode-note">No limit on guesses. Whoever finds the word first wins.</p>
+        </div>
       </section>
     );
   }
@@ -93,61 +104,100 @@ function GameCard() {
   return <ActiveCard game={active} me={me} partner={partner} />;
 }
 
+const MODE_LABEL: Record<GameMode, string> = { classic: 'Classic', challenge: 'Challenge ⚔️', endless: 'Endless ♾️' };
+
 function ActiveCard({ game, me, partner }: { game: GameView; me: Player; partner: Player }) {
+  const { slot, setActive, ping, reportError } = useStore();
+  const [busy, setBusy] = useState(false);
   const mineDone = game.me.status === 'solved' || game.me.status === 'failed';
   const challenge = game.mode === 'challenge';
-  const invitedMe = !challenge && !game.me.joined_at && game.created_by !== me.slot;
-  let eyebrow = 'Game live';
+  const endless = game.mode === 'endless';
+  const waiting = game.status === 'waiting';
+
+  // v1.19: joining, getting ready and cancelling all happen right here on Home.
+  async function join() {
+    if (!slot) return;
+    setBusy(true);
+    try {
+      const r = await api.joinGame(slot, game.id);
+      setActive(r.game);
+      ping('game', 'joined');
+    } catch (e) {
+      reportError(e);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function cancel() {
+    if (!slot) return;
+    setBusy(true);
+    try {
+      await api.cancelGame(slot, game.id);
+      setActive(null);
+      ping('game', 'cancelled');
+    } catch (e) {
+      reportError(e);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // The lobby: one of you is waiting for the other.
+  if (waiting) {
+    const iAmIn = !!game.me.joined_at;
+    const theyAreIn = !!game.partner.joined_at && !!game.partner.here;
+    return (
+      <section className={`card game-card live lobby${challenge ? ' challenge' : ''}`}>
+        <p className="eyebrow live-eyebrow"><i className="dot" /> {MODE_LABEL[game.mode ?? 'classic']}</p>
+        {iAmIn ? (
+          <>
+            <h2 className="game-card-title">Waiting for {partner.name}</h2>
+            <div className="lobby-status" role="status">
+              <span className="lobby-chip on">✓ You're here</span>
+              {theyAreIn && <span className="lobby-chip on">✓ {partner.name} is here</span>}
+            </div>
+            <button className="btn text small" onClick={cancel} disabled={busy}>Cancel</button>
+          </>
+        ) : (
+          <>
+            <h2 className="game-card-title">{challenge ? 'Both words are in!' : `${partner.name} started a game!`}</h2>
+            <button className="btn primary big" onClick={join} disabled={busy}>{challenge ? "I'M READY" : 'JOIN GAME'}</button>
+          </>
+        )}
+      </section>
+    );
+  }
+
   let title = 'Game live';
-  let note: string | null = null;
   let cta = 'CONTINUE';
   if (challenge && game.status === 'setting') {
-    eyebrow = 'Challenge ⚔️';
     if (!game.i_have_set) {
       title = game.created_by === me.slot ? `Pick a word for ${partner.name}` : `${partner.name} challenged you!`;
-      note = `Choose the word ${partner.name} has to solve.${game.partner_has_set ? ` ${partner.name} has already picked yours.` : ''}`;
       cta = 'PICK A WORD';
     } else {
       title = `Waiting for ${partner.name} to pick your word`;
       cta = 'VIEW';
     }
-  } else if (challenge && game.status === 'waiting') {
-    eyebrow = 'Challenge ⚔️';
-    title = game.me.joined_at ? `Waiting for ${partner.name} to get ready` : 'Both words are in!';
-    cta = game.me.joined_at ? 'VIEW' : "I'M READY";
-  } else if (invitedMe) {
-    eyebrow = 'Your turn to join';
-    title = `${partner.name} started a game!`;
-    note = game.partner.here ? `${partner.name} is in the app, so it starts as soon as you join.` : `It starts when you're both in the app.`;
-    cta = 'JOIN GAME';
-  } else if (game.status === 'waiting') {
-    eyebrow = 'Waiting for player';
-    title = `Waiting for ${partner.name}`;
-    // v1.18: it only counts down while you're both in the app.
-    note = game.partner.here ? `${partner.name} is here. Starting…` : `It starts when you're both in the app. Stay here or on the game.`;
-  } else {
-    if (challenge) eyebrow = 'Challenge ⚔️ · live';
-    if (mineDone) {
-      title = game.me.status === 'solved' ? `You solved it in ${game.me.guess_count}` : 'Your round is over';
-      cta = 'VIEW';
-    }
+  } else if (mineDone) {
+    title = game.me.status === 'solved' ? `You solved it in ${game.me.guess_count}` : 'Your round is over';
+    cta = 'VIEW';
   }
-  const showScores = game.status !== 'setting' && !(challenge && game.status === 'waiting');
+  const showScores = game.status !== 'setting';
   const side = (p: Player, v: GameView['me'] | GameView['partner'], label: string) => (
     <div className="mini-side">
       <Avatar player={p} size={34} />
       <div>
         <p className="mini-name">{label}</p>
-        <p className="mini-score">{v.status === 'solved' ? '✓ ' : ''}{v.guess_count}/6</p>
+        <p className="mini-score">{v.status === 'solved' ? '✓ ' : ''}{v.guess_count}{endless ? '' : '/6'}</p>
       </div>
     </div>
   );
   return (
     <section className={`card game-card live${challenge ? ' challenge' : ''}`}>
-      <p className="eyebrow live-eyebrow"><i className="dot" /> {eyebrow}</p>
+      <p className="eyebrow live-eyebrow"><i className="dot" /> {MODE_LABEL[game.mode ?? 'classic']}</p>
       <h2 className="game-card-title">{title}</h2>
       {game.me.started_at && (
-        <p className="live-clock"><Elapsed startedAt={game.me.started_at} durationMs={game.me.duration_ms} /></p>
+        <p className="live-clock"><RoundElapsed r={game.me} />{game.me.paused && game.me.status === 'playing' ? ' ⏸' : ''}</p>
       )}
       {showScores && (
         <div className="mini-vs">
@@ -156,13 +206,11 @@ function ActiveCard({ game, me, partner }: { game: GameView; me: Player; partner
           {side(partner, game.partner, partner.name)}
         </div>
       )}
-      {note && <p className="muted small">{note}</p>}
       <button className="btn primary big" onClick={() => go('/game')}>{cta}</button>
     </section>
   );
 }
 
-const STATUS_IDEAS = ['Rematch? 😏', 'Ready when you are', "You're going down 🔥", 'Miss you 😘', 'Free for a game?'];
 const STATUS_MAX = 80;
 
 function ago(iso: string) {
@@ -273,16 +321,13 @@ function Couple({ me, partner }: { me: Player; partner: Player }) {
         {side(partner, false)}
       </div>
       {open && (
-        <div className="modal-backdrop" onClick={() => setOpen(false)}>
+        // v1.19: near the top, so the phone keyboard never covers it.
+        <div className="modal-backdrop top" onClick={() => setOpen(false)}>
           <form className="modal" role="dialog" aria-modal="true" aria-label={`Say something to ${partner.name}`}
             onClick={(e) => e.stopPropagation()} onSubmit={(e) => { e.preventDefault(); void save(text); }}>
             <h3>{me.status_text ? 'Edit your message' : `Say something to ${partner.name}`}</h3>
-            <p className="muted small">It shows as a speech bubble from your photo on {partner.name}'s home screen, for a day.</p>
             <input ref={inputRef} className="text-input" value={text} maxLength={STATUS_MAX} onChange={(e) => setText(e.target.value)}
-              placeholder="Rematch tonight? 😏" aria-label="Your message" enterKeyHint="send" />
-            <div className="trash-lines wrap">
-              {STATUS_IDEAS.map((i) => <button type="button" key={i} className="trash-line" onClick={() => setText(i)}>{i}</button>)}
-            </div>
+              placeholder="Say something…" aria-label="Your message" enterKeyHint="send" />
             <div className="modal-actions">
               {me.status_text && <button type="button" className="btn ghost" onClick={() => save('')} disabled={busy}>Clear</button>}
               <button type="submit" className="btn primary" disabled={busy || !text.trim()}>{me.status_text ? 'Update' : 'Post'}</button>

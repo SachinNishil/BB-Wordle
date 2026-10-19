@@ -11,9 +11,9 @@ import { useStore } from '../store';
 const pct = (x: number | null) => (x == null ? '–' : `${Math.round(x * 100)}%`);
 const num = (x: number | null, d = 2) => (x == null ? '–' : x.toFixed(d));
 
-function Distribution({ s, color }: { s: PlayerStats; color: string }) {
+function Distribution({ s, color, plus = false }: { s: PlayerStats; color: string; plus?: boolean }) {
   const max = Math.max(1, ...s.distribution, s.failed);
-  const rows = [...s.distribution.map((c, i) => ({ label: String(i + 1), c })), { label: 'X', c: s.failed }];
+  const rows = [...s.distribution.map((c, i) => ({ label: plus && i === 5 ? '6+' : String(i + 1), c })), { label: 'X', c: s.failed }];
   return (
     <div className="dist" role="img" aria-label={`Guess distribution: ${rows.map((r) => `${r.label}: ${r.c}`).join(', ')}`}>
       {rows.map((r) => (
@@ -29,10 +29,11 @@ function Distribution({ s, color }: { s: PlayerStats; color: string }) {
   );
 }
 
-type Mode = 'classic' | 'challenge' | 'solo';
+type Mode = 'classic' | 'challenge' | 'endless' | 'solo';
 const MODES: { id: Mode; label: string }[] = [
   { id: 'classic', label: 'Classic' },
   { id: 'challenge', label: 'Challenge ⚔️' },
+  { id: 'endless', label: 'Endless ♾️' },
   { id: 'solo', label: 'Solo' },
 ];
 type Row = { label: string; v: [string, string]; best: Slot | null };
@@ -83,6 +84,7 @@ function soloAsPlayer(r: SoloStats): PlayerStats {
 const NOTES: Record<Mode, string> = {
   classic: 'Classic battles only: one random word, the same for both of you.',
   challenge: 'Challenge battles only: each of you solves the word the other picked.',
+  endless: 'Endless races only: no limit on guesses, the first to find the word wins. Guess averages run higher here.',
   solo: "Solo games only. They're kept apart from the battles.",
 };
 
@@ -103,7 +105,7 @@ export function StatsScreen() {
   const byMode = useMemo(() => {
     const of = (m: GameMode) => games.filter((g) => (g.mode ?? 'classic') === m);
     const st = (gs: HistoryGame[]) => ({ 1: playerStats(gs, 1), 2: playerStats(gs, 2) }) as Record<Slot, PlayerStats>;
-    return { classic: st(of('classic')), challenge: st(of('challenge')) };
+    return { classic: st(of('classic')), challenge: st(of('challenge')), endless: st(of('endless')) };
   }, [games]);
   const names = { 1: players[1].name, 2: players[2].name };
   const fun = useMemo(() => awards(games, names, fmtDuration, solo ?? [], soloHistory ?? []), [games, solo, soloHistory, names[1], names[2]]); // eslint-disable-line
@@ -161,9 +163,9 @@ export function StatsScreen() {
             {h.winStreak.slot && h.winStreak.length > 1 ? ` · ${names[h.winStreak.slot]} has won ${h.winStreak.length} in a row 🔥` : ''}
           </p>
           <div className="mode-split">
-            {(['classic', 'challenge'] as const).map((m) => (
+            {(['classic', 'challenge', 'endless'] as const).filter((m) => m !== 'endless' || h.byMode.endless.games > 0).map((m) => (
               <div key={m} className="mode-split-item">
-                <span className="mode-split-label">{m === 'classic' ? 'Classic' : 'Challenge ⚔️'}</span>
+                <span className="mode-split-label">{m === 'classic' ? 'Classic' : m === 'challenge' ? 'Challenge ⚔️' : 'Endless ♾️'}</span>
                 <span className="mode-split-score">
                   {names[1]} <b>{h.byMode[m].wins[1]}</b> · <b>{h.byMode[m].wins[2]}</b> {names[2]}
                 </span>
@@ -220,7 +222,7 @@ export function StatsScreen() {
               ))}
             </div>
           </div>
-          <Distribution s={dist[distFor]} color={`p${distFor}`} />
+          <Distribution s={dist[distFor]} color={`p${distFor}`} plus={mode === 'endless'} />
         </section>
       )}
 

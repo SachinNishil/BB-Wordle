@@ -12,6 +12,8 @@ export type Pattern = string; // five Marks, e.g. "GYXXG"
 
 export const WORD_LENGTH = 5;
 export const MAX_GUESSES = 6;
+/** v1.19: rows on screen in Endless mode (older ones scroll up). */
+export const isEndless = (mode?: string | null) => mode === 'endless';
 export const SOLVED: Pattern = 'GGGGG';
 
 /**

@@ -5,7 +5,7 @@ import { BadgeChips } from '../components/Badges';
 import { Countdown } from '../components/Countdown';
 import { Icon } from '../components/Icon';
 import { Keyboard } from '../components/Keyboard';
-import { Elapsed, PartnerMini, SideCard, WatchingEye } from '../components/Live';
+import { PartnerMini, RoundElapsed, SideCard, WatchingEye } from '../components/Live';
 import { fromGameView, ResultsView } from '../components/Results';
 import { HiddenWord, WordTiles } from '../components/Tiles';
 import { Soundboard, TrashTalk, useFeedTaunts } from '../components/TrashTalk';
@@ -106,6 +106,31 @@ export function GameScreen({ id }: { id?: string }) {
   }, [reload, pulse]);
 
   const phase = phaseOf(game, loaded);
+  const endless = game?.mode === 'endless';
+
+  // v1.19: no waiting room. Waiting for the other one happens on Home; the app
+  // jumps here when the countdown starts.
+  useEffect(() => {
+    if (phase === 'waiting') go('/', true);
+  }, [phase]);
+
+  // v1.19: leaving a round (app minimised, or back to Home) stops my clock;
+  // coming back carries on. Nothing is counted while I'm away.
+  const playingId = phase === 'playing' && game ? game.id : null;
+  useEffect(() => {
+    if (!playingId || !slot) return;
+    const send = (paused: boolean) => api.pauseRound(slot, playingId, paused).then((r) => { if (r.game && !paused) apply(r.game); ping('game', 'pause'); }).catch(() => {});
+    if (document.visibilityState === 'visible') void send(false);
+    const vis = () => void send(document.visibilityState !== 'visible');
+    const hide = () => void send(true);
+    document.addEventListener('visibilitychange', vis);
+    window.addEventListener('pagehide', hide);
+    return () => {
+      document.removeEventListener('visibilitychange', vis);
+      window.removeEventListener('pagehide', hide);
+      void send(true);
+    };
+  }, [playingId, slot]); // eslint-disable-line react-hooks/exhaustive-deps
   useFeedTaunts(game, slot);
   if (phase === 'playing') sawPlaying.current = true;
   const finishedNow = phase === 'finished' && revealRow === null;
@@ -572,42 +597,9 @@ export function GameScreen({ id }: { id?: string }) {
     );
   }
 
-  if (phase === 'waiting' && game) {
-    return (
-      <div className="screen waiting">
-        <header className="topbar">
-          <button className="iconbtn" onClick={() => back('/')} aria-label="Back"><Icon name="back" /></button>
-          <h1 className="topbar-title">Game #{game.number}</h1>
-          <div className="topbar-right" />
-        </header>
-        <div className="waiting-body">
-          <div className="waiting-couple">
-            <Avatar player={me} size={76} ring />
-            <span className="beat" aria-hidden="true">❤️</span>
-            <Avatar player={partner} size={76} ring />
-          </div>
-          <p className="eyebrow">{game.mode === 'challenge' ? "You're ready" : 'Waiting for player'}</p>
-          <h2 className="waiting-title">Waiting for {partner.name}</h2>
-          {/* v1.18: both of you have to be in the app at the same time for it to start. */}
-          <div className="lobby-status" role="status">
-            <span className="lobby-chip on">✓ You're here</span>
-            <span className={`lobby-chip${game.partner.here && game.partner.joined_at ? ' on' : ''}`}>
-              {game.partner.here && game.partner.joined_at ? `✓ ${partner.name} is here` : `${partner.name} isn't here yet`}
-            </span>
-          </div>
-          <p className="muted">
-            {game.mode === 'challenge'
-              ? `The countdown starts when ${partner.name} taps Ready while you're both in the app.`
-              : `The countdown starts when you're both in the app at the same time. Keep this screen (or Home) open.`}
-          </p>
-          <div className="stack">
-            <button className="btn soft" onClick={nudge}><Icon name="share" size={18} /> Send {partner.name} a nudge</button>
-            <button className="btn text" onClick={cancel} disabled={busy}>Cancel this game</button>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // v1.19: waiting happens on Home (see the effect above); just a beat here while it goes back.
+  if (phase === 'waiting' && game) return <div className="screen center"><span className="loader" aria-label="Back to Home" /></div>;
+
 
   if (!game) return null;
 
@@ -633,7 +625,7 @@ export function GameScreen({ id }: { id?: string }) {
             {/* v1.9: their clock, ticking live, while you watch. */}
             {game.partner.started_at && (
               <span className="topbar-clock spectate-clock" aria-label={`${partner.name}'s time`}>
-                {' '}· <Elapsed startedAt={game.partner.started_at} durationMs={game.partner.duration_ms} />
+                {' '}· <RoundElapsed r={game.partner} />{game.partner.paused && game.partner.status === 'playing' ? ' ⏸' : ''}
               </span>
             )}
           </h1>
@@ -641,9 +633,9 @@ export function GameScreen({ id }: { id?: string }) {
         </header>
         {/* v1.9: spectating is back to the score cards, with the full chat dock at the bottom. */}
         <div className="vs-strip">
-          <SideCard player={me} view={game.me} isMe align="left" />
+          <SideCard player={me} view={game.me} isMe align="left" endlessMode={endless} />
           <span className="vs-chip">VS</span>
-          <SideCard player={partner} isMe={false} align="right"
+          <SideCard player={partner} isMe={false} align="right" endlessMode={endless}
             view={partnerReveal !== null && theirs
               ? { ...game.partner, patterns: game.partner.patterns.slice(0, partnerReveal), guess_count: partnerReveal, status: 'playing', duration_ms: null, gave_up: false }
               : game.partner} />
@@ -666,16 +658,16 @@ export function GameScreen({ id }: { id?: string }) {
             )
           ) : (
             <>
-              <span>{game.me.status === 'solved' ? `You solved it in ${game.me.guess_count}` : game.me.gave_up ? 'You gave up' : 'Out of guesses'} · <Elapsed startedAt={game.me.started_at} durationMs={game.me.duration_ms} /></span>
+              <span>{game.me.status === 'solved' ? `You solved it in ${game.me.guess_count}` : game.me.gave_up ? 'You gave up' : 'Out of guesses'} · <RoundElapsed r={game.me} /></span>
               {game.answer && <HiddenWord word={game.answer} shown={showWord} onToggle={() => setShowWord((x) => !x)} />}
             </>
           )}
         </div>
         {theirs ? (
-          <Board key="partner" guesses={pg} current={live ?? ''} revealRow={partnerReveal} shake={false} bounceRow={null}
+          <Board key="partner" guesses={pg} current={live ?? ''} revealRow={partnerReveal} shake={false} bounceRow={null} endless={endless}
             active={live !== null && partnerReveal === null} label={`${partner.name}'s guesses`} />
         ) : (
-          <Board key="mine" guesses={game.me.guesses} current="" revealRow={null} shake={false} bounceRow={null} active={false} />
+          <Board key="mine" guesses={game.me.guesses} current="" revealRow={null} shake={false} bounceRow={null} active={false} endless={endless} />
         )}
         <TrashTalk game={game} slot={slot} players={players} onGame={apply} variant="dock" />
         </>
@@ -692,8 +684,8 @@ export function GameScreen({ id }: { id?: string }) {
       <header className="topbar">
         <button className="iconbtn" onClick={() => back('/')} aria-label="Back"><Icon name="back" /></button>
         <h1 className="topbar-title">
-          {game.mode === 'challenge' ? 'Challenge ⚔️' : `Game #${game.number}`}
-          {game.me.started_at && <span className="topbar-clock"> · <Elapsed startedAt={game.me.started_at} durationMs={game.me.duration_ms} /></span>}
+          {game.mode === 'challenge' ? 'Challenge ⚔️' : endless ? `Endless ♾️` : `Game #${game.number}`}
+          {game.me.started_at && <span className="topbar-clock"> · <RoundElapsed r={game.me} /></span>}
           {partnerWatching && <WatchingEye name={partner.name} />}
         </h1>
         <div className="topbar-right">
@@ -707,14 +699,14 @@ export function GameScreen({ id }: { id?: string }) {
       {/* v1.9: while you're playing, the box above the board is an emoji soundboard. */}
       <div className="vs-strip chat-strip">
         {slot && <Soundboard game={game} slot={slot} />}
-        <PartnerMini player={partner} patterns={game.partner.patterns} status={game.partner.status} />
+        <PartnerMini player={partner} view={game.partner} endless={endless} />
       </div>
       <>
       {game.partner.status === 'solved' && game.me.status !== 'solved' && game.me.status !== 'failed' && (
         <p className="partner-news">{game.mode === 'challenge' ? `🏆 ${partner.name} has solved the word you picked.` : "🏆 Your partner has solved today's word."}</p>
       )}
 
-      <Board guesses={guesses} current={typed} revealRow={revealRow} shake={shake} bounceRow={bounceRow}
+      <Board guesses={guesses} current={typed} revealRow={revealRow} shake={shake} bounceRow={bounceRow} endless={endless}
         active={phase === 'playing' || phase === 'countdown'} />
 
       {finishedView ? (
@@ -722,7 +714,7 @@ export function GameScreen({ id }: { id?: string }) {
           <div className="finished-head">
             <div>
               <p className="eyebrow">{game.me.status === 'solved' ? `Solved in ${game.me.guess_count}` : game.me.gave_up ? 'You gave up' : 'Out of guesses'}</p>
-              <p className="finished-time">Your time <b><Elapsed startedAt={game.me.started_at} durationMs={game.me.duration_ms} /></b></p>
+              <p className="finished-time">Your time <b><RoundElapsed r={game.me} /></b></p>
             </div>
             {game.answer && (
               <div className="finished-word">
@@ -735,7 +727,7 @@ export function GameScreen({ id }: { id?: string }) {
           <p className="finished-wait">
             <span className="loader small" aria-hidden="true" />
             {game.partner.status === 'playing'
-              ? `${partner.name} is on guess ${Math.min(game.partner.guess_count + 1, 6)}. Results appear the moment ${partner.name} finishes.`
+              ? `${partner.name} is on guess ${endless ? game.partner.guess_count + 1 : Math.min(game.partner.guess_count + 1, 6)}. Results appear the moment ${partner.name} finishes.`
               : `Waiting for ${partner.name} to play. Results appear the moment ${partner.name} finishes.`}
           </p>
           <button className="btn ghost" onClick={() => go('/', true)}>Back home</button>

@@ -138,7 +138,7 @@ export async function renderResultImage(d: ResultData, players: Record<Slot, Pla
   ctx.fillStyle = C.ink2;
   ctx.font = `600 30px ${UI}`;
   const when = fmtDate(d.date, { day: 'numeric', month: 'long', year: 'numeric' });
-  ctx.fillText(`${d.mode === 'challenge' ? 'Challenge ⚔️ · ' : ''}Game #${d.number} · ${when}`, W / 2, 160);
+  ctx.fillText(`${d.mode === 'challenge' ? 'Challenge ⚔️ · ' : d.mode === 'endless' ? 'Endless ♾️ · ' : ''}Game #${d.number} · ${when}`, W / 2, 160);
 
   // Winner card
   const v = verdict(d, players);
@@ -190,20 +190,24 @@ export async function renderResultImage(d: ResultData, players: Record<Slot, Pla
     ctx.textAlign = 'right';
     ctx.fillStyle = C.ink;
     ctx.font = `800 34px ${UI}`;
-    const score = side.status === 'solved' ? `${side.guess_count}/6` : side.gave_up ? 'Gave up' : 'X/6';
+    const of = d.mode === 'endless' ? ' guesses' : '/6';
+    const score = side.status === 'solved' ? `${side.guess_count}${of}` : side.gave_up ? 'Gave up' : `X${of}`;
     ctx.fillText(score, x0 + colW, 404);
     ctx.fillStyle = C.ink2;
     ctx.font = `600 26px ${UI}`;
     ctx.fillText(fmtDuration(side.duration_ms), x0 + colW, 442);
 
-    const rows = side.guesses ?? [];
+    // Endless can run past six rows: the picture shows the last six.
+    const skip = Math.max(0, (side.guesses?.length ?? side.patterns.length) - 6);
+    const rows = (side.guesses ?? []).slice(skip);
+    const pats = side.patterns.slice(skip);
     for (let r = 0; r < 6; r++) {
       const row = rows[r];
       for (let i = 0; i < 5; i++) {
         const tx = x0 + i * (s + gap);
         const ty = boardTop + r * (s + gap);
         if (row) tile(ctx, tx, ty, s, row.word[i] ?? '', row.pattern[i]);
-        else if (side.patterns[r]) tile(ctx, tx, ty, s, '', side.patterns[r][i]);
+        else if (pats[r]) tile(ctx, tx, ty, s, '', pats[r][i]);
         else tile(ctx, tx, ty, s, '');
       }
     }

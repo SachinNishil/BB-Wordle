@@ -9,6 +9,20 @@ export interface Release {
 
 export const VERSIONS: Release[] = [
   {
+    version: '1.19.0',
+    date: '2026-10-18',
+    changes: [
+      'New Endless race: no limit on guesses, whoever finds the word first wins. Rows keep coming and older ones slide up (scroll back to see them). It has its own tab in Stats.',
+      'No more waiting room: start or join a game and you wait right on Home ("You\'re here"). The 3, 2, 1 starts the moment you\'re both in the app.',
+      'An invite nobody joins within 10 minutes is called off on its own.',
+      'Your clock now stops while you\'re away from a round (app minimised or back on Home) and carries on when you come back. Your partner\'s clock shows top right next to their board, with ⏸ while they\'re away.',
+      'The game that ran for a whole day in the background no longer counts its time in your averages (its result stays).',
+      'The phone keyboard now slides over the app instead of squashing it, and the box you\'re typing in sits just above it.',
+      'The status box opens near the top, empty, with no suggestions, so the keyboard never covers it.',
+      'In dark mode the bottom gesture bar is dark too (it may take a day, or a reinstall, for Android to pick this up).',
+    ],
+  },
+  {
     version: '1.18.0',
     date: '2026-10-16',
     changes: [

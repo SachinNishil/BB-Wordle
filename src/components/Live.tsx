@@ -18,12 +18,20 @@ export function Elapsed({ startedAt, durationMs }: { startedAt: string | null; d
   return <>{fmtDuration(Math.max(0, serverNow() - Date.parse(startedAt)))}</>;
 }
 
-/** A solo game's clock (v1.11): stands still while paused, skips the time away. */
-export function SoloElapsed({ solo }: { solo: SoloView }) {
-  if (solo.duration_ms != null) return <Elapsed startedAt={solo.started_at} durationMs={solo.duration_ms} />;
-  if (solo.paused) return <Elapsed startedAt={solo.started_at} durationMs={solo.elapsed_ms ?? 0} />;
-  const from = new Date(Date.parse(solo.started_at) + (solo.paused_ms ?? 0)).toISOString();
+interface Clocked { started_at: string | null; duration_ms: number | null; paused?: boolean; paused_ms?: number; elapsed_ms?: number }
+
+/** A round's clock (v1.19, battles and solo): stands still while paused, skips the time away. */
+export function RoundElapsed({ r }: { r: Clocked }) {
+  if (r.duration_ms != null) return <Elapsed startedAt={r.started_at} durationMs={r.duration_ms} />;
+  if (!r.started_at) return <>0:00</>;
+  if (r.paused) return <Elapsed startedAt={r.started_at} durationMs={r.elapsed_ms ?? 0} />;
+  const from = new Date(Date.parse(r.started_at) + (r.paused_ms ?? 0)).toISOString();
   return <Elapsed startedAt={from} durationMs={null} />;
+}
+
+/** A solo game's clock (v1.11). */
+export function SoloElapsed({ solo }: { solo: SoloView }) {
+  return <RoundElapsed r={solo} />;
 }
 
 /** v1.11: a lasting sign that your partner is watching your board. */
@@ -54,15 +62,17 @@ export function statusLabel(p: MeView | PartnerView, isMe: boolean): { text: str
 }
 
 /** One side of the VS strip at the top of the game. */
-export function SideCard({ player, view, isMe, align }: {
+export function SideCard({ player, view, isMe, align, endlessMode }: {
   player: Player;
   view: MeView | PartnerView;
   isMe: boolean;
   align: 'left' | 'right';
+  endlessMode?: boolean;
 }) {
   const patterns = 'patterns' in view ? view.patterns : view.guesses.map((g) => g.pattern);
   const st = statusLabel(view, isMe);
-  const attempt = view.status === 'playing' ? Math.min(view.guess_count + 1, 6) : view.guess_count;
+  const endless = !!endlessMode;
+  const attempt = view.status === 'playing' ? (endless ? view.guess_count + 1 : Math.min(view.guess_count + 1, 6)) : view.guess_count;
   return (
     <div className={`side ${align} ${st.tone}`}>
       <div className="side-top">
@@ -70,13 +80,13 @@ export function SideCard({ player, view, isMe, align }: {
         <span className="side-name">{isMe ? 'You' : player.name}</span>
       </div>
       <div className="side-body">
-        <MiniGrid patterns={patterns} cell={7} gap={2} />
+        <MiniGrid patterns={patterns.slice(-6)} cell={7} gap={2} />
         <div className="side-stats">
           <span className="side-guess">
             {view.status === 'playing' ? 'Guess ' : ''}
-            <b>{attempt}</b>/6
+            <b>{attempt}</b>{endless ? '' : '/6'}
           </span>
-          <span className="side-time"><Elapsed startedAt={view.started_at} durationMs={view.duration_ms} /></span>
+          <span className="side-time"><RoundElapsed r={view} />{view.paused && view.status === 'playing' ? ' ⏸' : ''}</span>
           <span className={`side-status ${st.tone}`}>
             {st.text}
           </span>
@@ -86,13 +96,22 @@ export function SideCard({ player, view, isMe, align }: {
   );
 }
 
-/** v1.7: just the partner's name over their colours-only mini board (frees room for the chat box). */
-export function PartnerMini({ player, patterns, status }: { player: Player; patterns: string[]; status: string }) {
+/**
+ * v1.7: the partner's name over their colours-only mini board. v1.19: plus their
+ * clock, which stands still (⏸) while they've left the game.
+ */
+export function PartnerMini({ player, view, endless = false }: { player: Player; view: PartnerView; endless?: boolean }) {
+  const { patterns, status } = view;
   const done = status === 'solved' ? ' win' : status === 'failed' ? ' lose' : '';
+  const away = view.paused && status === 'playing';
   return (
     <div className={`partner-mini${done}`} aria-label={`${player.name}: ${patterns.length} guesses`}>
       <span className="partner-mini-name">{player.name}{status === 'solved' ? ' ✓' : ''}</span>
-      <MiniGrid patterns={patterns} cell={10} gap={2} />
+      <MiniGrid patterns={patterns.slice(-6)} cell={10} gap={2} />
+      <span className={`partner-mini-clock${away ? ' paused' : ''}`} aria-label={`${player.name}'s time${away ? ', paused' : ''}`}>
+        {away ? '⏸ ' : ''}{view.started_at ? <RoundElapsed r={view} /> : '0:00'}
+        {endless && patterns.length > 6 ? ` · ${patterns.length}` : ''}
+      </span>
     </div>
   );
 }

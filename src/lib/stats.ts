@@ -35,7 +35,8 @@ export function playerStats(games: HistoryGame[], slot: Slot): PlayerStats {
     .filter((r): r is { g: HistoryGame; p: HistoryPlayer } => !!r.p);
   const solved = rounds.filter((r) => r.p.status === 'solved');
   const distribution = [0, 0, 0, 0, 0, 0];
-  for (const r of solved) distribution[r.p.guess_count - 1]++;
+  // Endless rounds can take more than six; they count in the last bar ("6+").
+  for (const r of solved) distribution[Math.min(r.p.guess_count, 6) - 1]++;
 
   let longest = 0;
   let run = 0;
@@ -113,7 +114,7 @@ export function headToHead(games: HistoryGame[]): HeadToHead {
     length++;
   }
   const byMode = {} as Record<GameMode, ModeRecord>;
-  for (const mode of ['classic', 'challenge'] as GameMode[]) {
+  for (const mode of ['classic', 'challenge', 'endless'] as GameMode[]) {
     const gs = games.filter((g) => (g.mode ?? 'classic') === mode);
     byMode[mode] = {
       games: gs.length,

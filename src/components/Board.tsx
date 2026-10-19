@@ -14,10 +14,13 @@ interface Props {
   /** Show the current typing row. */
   active: boolean;
   label?: string;
+  /** v1.19 Endless mode: as many rows as it takes. Six fit on screen; older ones scroll up. */
+  endless?: boolean;
 }
 
-export function Board({ guesses, current, revealRow, shake, bounceRow, active, label = 'Your guesses' }: Props) {
+export function Board({ guesses, current, revealRow, shake, bounceRow, active, label = 'Your guesses', endless = false }: Props) {
   const wrap = useRef<HTMLDivElement>(null);
+  const boardRef = useRef<HTMLDivElement>(null);
   const [tile, setTile] = useState(56);
 
   // Size tiles to the space available, so the board never needs scrolling.
@@ -38,7 +41,13 @@ export function Board({ guesses, current, revealRow, shake, bounceRow, active, l
     return () => ro.disconnect();
   }, []);
 
-  const rows = Array.from({ length: MAX_GUESSES }, (_, r) => {
+  const count = endless ? Math.max(MAX_GUESSES, guesses.length + (active ? 1 : 0)) : MAX_GUESSES;
+  // Endless: keep the newest row in view (older rows move up and can be scrolled back to).
+  useEffect(() => {
+    const el = boardRef.current;
+    if (endless && el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+  }, [endless, count, guesses.length]);
+  const rows = Array.from({ length: count }, (_, r) => {
     if (r < guesses.length) return { kind: 'done' as const, ...guesses[r] };
     if (r === guesses.length && active) return { kind: 'typing' as const, word: current, pattern: '' };
     return { kind: 'empty' as const, word: '', pattern: '' };
@@ -46,7 +55,7 @@ export function Board({ guesses, current, revealRow, shake, bounceRow, active, l
 
   return (
     <div className="board-wrap" ref={wrap}>
-      <div className="board" style={{ ['--tile' as string]: `${tile}px` }} role="grid" aria-label={label}>
+      <div className={`board${endless ? ' endless' : ''}${count > MAX_GUESSES ? ' overflow' : ''}`} ref={boardRef} style={{ ['--tile' as string]: `${tile}px` }} role="grid" aria-label={label}>
         {rows.map((row, r) => (
           <div key={r} role="row"
             className={`row${row.kind === 'typing' && shake ? ' shake' : ''}${bounceRow === r ? ' bounce' : ''}`}>

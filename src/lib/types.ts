@@ -55,6 +55,11 @@ interface PlayerViewBase {
   gave_up: boolean;
   /** v1.18: in the app right now (checked in within the last few seconds). */
   here?: boolean;
+  /** v1.19: clock stopped because they've left the game (minimised or back to Home). */
+  paused?: boolean;
+  paused_ms?: number;
+  /** Time on the clock when this was sent. */
+  elapsed_ms?: number;
 }
 export interface MeView extends PlayerViewBase {
   guesses: GuessRow[];
@@ -80,7 +85,8 @@ export interface Taunt {
   kind?: 'chat' | 'boom';
 }
 
-export type GameMode = 'classic' | 'challenge';
+/** v1.19: 'endless' = no limit on guesses, the first to find the word wins. */
+export type GameMode = 'classic' | 'challenge' | 'endless';
 
 export interface GameView {
   id: string;

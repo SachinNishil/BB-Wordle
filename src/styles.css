@@ -390,6 +390,13 @@ textarea { resize: vertical; min-height: 120px; font-family: ui-monospace, SFMon
 
 .board-wrap { flex: 1 1 auto; min-height: 0; display: grid; place-items: center; padding: 10px 0; overflow: hidden; }
 .board { display: grid; grid-template-rows: repeat(6, var(--tile)); gap: 6px; }
+/* v1.19 Endless: a window of six rows; newer rows push older ones up (scroll back to see them). */
+.board.endless {
+  grid-template-rows: none; grid-auto-rows: var(--tile); max-height: calc(var(--tile) * 6 + 30px);
+  overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; padding: 0 2px;
+}
+.board.endless.overflow { mask-image: linear-gradient(to bottom, transparent 0, #000 18px); -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 18px); }
+.board.endless::-webkit-scrollbar { display: none; }
 .row { display: grid; grid-template-columns: repeat(5, var(--tile)); gap: 6px; }
 .tile {
   width: var(--tile); height: var(--tile); display: grid; place-items: center; border-radius: 10px;
@@ -463,6 +470,8 @@ textarea { resize: vertical; min-height: 120px; font-family: ui-monospace, SFMon
 
 .modal-backdrop { position: fixed; inset: 0; z-index: 40; background: rgba(20, 12, 5, 0.45); display: grid; place-items: end center; padding: 16px; animation: fade 160ms ease; }
 .modal { width: 100%; max-width: 420px; background: var(--surface); border-radius: var(--radius); padding: 22px; box-shadow: var(--shadow-lg); display: flex; flex-direction: column; gap: 10px; margin-bottom: var(--safe-bottom); animation: rise 240ms cubic-bezier(.2, 1.2, .4, 1); }
+.modal-backdrop.top { place-items: start center; padding-top: calc(var(--safe-top) + 64px); }
+.modal-backdrop.top .modal { margin-bottom: 0; }
 .modal-actions { display: flex; gap: 10px; margin-top: 8px; }
 .modal-actions .btn { flex: 1; }
 @keyframes fade { from { opacity: 0; } }
@@ -947,6 +956,13 @@ html.boom-shake .screen { animation: boom-shake 380ms cubic-bezier(.36, .07, .19
 .lobby-status { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 4px 0 2px; }
 .lobby-chip { padding: 5px 12px; border-radius: 999px; font-size: 0.82rem; font-weight: 800; background: var(--surface-2); color: var(--ink-3); }
 .lobby-chip.on { background: color-mix(in srgb, var(--green) 18%, var(--surface)); color: var(--green); }
+
+/* --------------------------------------------------------------- keyboard over the app (v1.19) */
+html.kb-open body { padding-bottom: var(--kb, 0px); }
+.trash.dock, .finished-panel, .modal { transition: translate 160ms ease; }
+.partner-mini-clock { font-size: 0.72rem; font-weight: 800; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.partner-mini-clock.paused { color: var(--yellow); }
+.endless-btn { margin-top: 2px; }
 
 /* --------------------------------------------------------------- desktop */
 @media (min-width: 700px) {

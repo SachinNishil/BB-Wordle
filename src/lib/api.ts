@@ -37,6 +37,7 @@ const FRIENDLY: Record<string, string> = {
   too_fast: 'Easy, easy. Give it a second.',
   dictionary_outdated: 'The word list needs updating. Run the new dictionary.sql in Supabase.',
   bad_status: 'Keep it to 80 characters.',
+  too_many_guesses: "That's 100 guesses. Time to give up?",
   telegram_not_set_up: 'Telegram is not set up yet (see the README).',
   telegram_unavailable: 'Turn on the pg_net extension in Supabase first (Database › Extensions).',
 };
@@ -92,6 +93,8 @@ export const api = {
     call<GameState>('set_challenge_word', { ...K, p_slot: slot, p_game_id: gameId, p_word: word }),
   joinGame: (slot: Slot, gameId: string, playNow = false) =>
     call<GameState>('join_game', { ...K, p_slot: slot, p_game_id: gameId, p_play_now: playNow }),
+  pauseRound: (slot: Slot, gameId: string, paused: boolean) =>
+    call<GameState>('pause_round', { ...K, p_slot: slot, p_game_id: gameId, p_paused: paused }),
   lobby: (slot: Slot, gameId: string, here = true) =>
     call<GameState>('lobby', { ...K, p_slot: slot, p_game_id: gameId, p_here: here }),
   beginRound: (slot: Slot, gameId: string) => call<GameState>('begin_round', { ...K, p_slot: slot, p_game_id: gameId }),

@@ -66,11 +66,12 @@ function resultText(s: ResultSide) {
 export function shareText(d: ResultData, players: Record<Slot, Player>) {
   const line = (slot: Slot) => {
     const s = d.sides[slot];
-    return `${d.winner === slot ? '🏆 ' : ''}${players[slot].name} ${s.status === 'solved' ? s.guess_count : 'X'}/6 · ${fmtDuration(s.duration_ms)}`;
+    const of = d.mode === 'endless' ? '' : '/6';
+    return `${d.winner === slot ? '🏆 ' : ''}${players[slot].name} ${s.status === 'solved' ? s.guess_count : 'X'}${of} · ${fmtDuration(s.duration_ms)}`;
   };
   const board = (slot: Slot) => `${players[slot].name}\n${d.sides[slot].patterns.map((p) => patternToEmoji(p)).join('\n')}`;
   const head = d.result === 'draw' ? 'Draw!' : d.result === 'both_failed' ? 'The word won 😅' : '';
-  const title = d.mode === 'challenge' ? `Wordle for two #${d.number} · Challenge ⚔️` : `Wordle for two #${d.number}`;
+  const title = d.mode === 'challenge' ? `Wordle for two #${d.number} · Challenge ⚔️` : d.mode === 'endless' ? `Wordle for two #${d.number} · Endless ♾️` : `Wordle for two #${d.number}`;
   return [title, head, line(1), line(2), '', board(1), '', board(2)].filter((x, i) => x || i > 1).join('\n');
 }
 
@@ -110,7 +111,7 @@ export function ResultsView({ data, title, isToday }: { data: ResultData; title?
     <div className="results">
       <p className="eyebrow">{title ?? (data.mode === 'challenge'
         ? `Challenge ⚔️ · ${isToday ? "today's words" : `game #${data.number} · ${fmtDate(data.date, { day: 'numeric', month: 'long' })}`}`
-        : isToday ? "Today's word" : `Game #${data.number} · ${fmtDate(data.date, { weekday: 'long', day: 'numeric', month: 'long' })}`)}</p>
+        : `${data.mode === 'endless' ? 'Endless ♾️ · ' : ''}${isToday ? "Today's word" : `Game #${data.number} · ${fmtDate(data.date, { weekday: 'long', day: 'numeric', month: 'long' })}`}`)}</p>
       {data.mode === 'challenge' ? (
         <div className="challenge-words">
           {slots.map((s) => (
@@ -176,7 +177,7 @@ export function ResultsView({ data, title, isToday }: { data: ResultData; title?
           </tr>
           <tr>
             <td>Attempts</td>
-            {slots.map((s) => <td key={s} className={fewer === s ? 'best' : ''}>{data.sides[s].status === 'solved' ? data.sides[s].guess_count : 'X'}/6</td>)}
+            {slots.map((s) => <td key={s} className={fewer === s ? 'best' : ''}>{data.sides[s].status === 'solved' ? data.sides[s].guess_count : 'X'}{data.mode === 'endless' ? '' : '/6'}</td>)}
           </tr>
           <tr>
             <td>Time</td>
