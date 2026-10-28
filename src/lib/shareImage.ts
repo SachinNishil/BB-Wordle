@@ -138,7 +138,7 @@ export async function renderResultImage(d: ResultData, players: Record<Slot, Pla
   ctx.fillStyle = C.ink2;
   ctx.font = `600 30px ${UI}`;
   const when = fmtDate(d.date, { day: 'numeric', month: 'long', year: 'numeric' });
-  ctx.fillText(`${d.mode === 'challenge' ? 'Challenge ⚔️ · ' : d.mode === 'endless' ? 'Endless ♾️ · ' : ''}Game #${d.number} · ${when}`, W / 2, 160);
+  ctx.fillText(`${d.mode === 'challenge' ? 'Challenge ⚔️ · ' : d.mode === 'endless' ? 'Endless ♾️ · ' : d.mode === 'sabotage' ? 'Sabotage 😈 · ' : ''}Game #${d.number} · ${when}`, W / 2, 160);
 
   // Winner card
   const v = verdict(d, players);

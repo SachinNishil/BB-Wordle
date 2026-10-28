@@ -16,9 +16,11 @@ interface Props {
   label?: string;
   /** v1.19 Endless mode: as many rows as it takes. Six fit on screen; older ones scroll up. */
   endless?: boolean;
+  /** v1.21 Sabotage: rows Steal a row took (shown locked at the bottom). */
+  locked?: number;
 }
 
-export function Board({ guesses, current, revealRow, shake, bounceRow, active, label = 'Your guesses', endless = false }: Props) {
+export function Board({ guesses, current, revealRow, shake, bounceRow, active, label = 'Your guesses', endless = false, locked = 0 }: Props) {
   const wrap = useRef<HTMLDivElement>(null);
   const boardRef = useRef<HTMLDivElement>(null);
   const [tile, setTile] = useState(56);
@@ -58,7 +60,7 @@ export function Board({ guesses, current, revealRow, shake, bounceRow, active, l
       <div className={`board${endless ? ' endless' : ''}${count > MAX_GUESSES ? ' overflow' : ''}`} ref={boardRef} style={{ ['--tile' as string]: `${tile}px` }} role="grid" aria-label={label}>
         {rows.map((row, r) => (
           <div key={r} role="row"
-            className={`row${row.kind === 'typing' && shake ? ' shake' : ''}${bounceRow === r ? ' bounce' : ''}`}>
+            className={`row${row.kind === 'typing' && shake ? ' shake' : ''}${bounceRow === r ? ' bounce' : ''}${locked && r >= count - locked && row.kind === 'empty' ? ' locked' : ''}`}>
             {[0, 1, 2, 3, 4].map((i) => {
               const letter = row.word[i] ?? '';
               if (row.kind === 'done') {

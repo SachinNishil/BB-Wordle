@@ -100,13 +100,14 @@ export function SideCard({ player, view, isMe, align, endlessMode }: {
  * v1.7: the partner's name over their colours-only mini board. v1.19: plus their
  * clock, which stands still (⏸) while they've left the game.
  */
-export function PartnerMini({ player, view, endless = false }: { player: Player; view: PartnerView; endless?: boolean }) {
+export function PartnerMini({ player, view, endless = false, badge = null }: { player: Player; view: PartnerView; endless?: boolean; badge?: string | null }) {
   const { patterns, status } = view;
   const done = status === 'solved' ? ' win' : status === 'failed' ? ' lose' : '';
   const away = view.paused && status === 'playing';
   return (
     <div className={`partner-mini${done}`} aria-label={`${player.name}: ${patterns.length} guesses`}>
       <span className="partner-mini-name">{player.name}{status === 'solved' ? ' ✓' : ''}</span>
+      {badge && <span className="partner-mini-badge" aria-label="Sabotaged">{badge}</span>}
       <MiniGrid patterns={patterns.slice(-6)} cell={10} gap={2} />
       <span className={`partner-mini-clock${away ? ' paused' : ''}`} aria-label={`${player.name}'s time${away ? ', paused' : ''}`}>
         {away ? '⏸ ' : ''}{view.started_at ? <RoundElapsed r={view} /> : '0:00'}

@@ -114,7 +114,7 @@ export function headToHead(games: HistoryGame[]): HeadToHead {
     length++;
   }
   const byMode = {} as Record<GameMode, ModeRecord>;
-  for (const mode of ['classic', 'challenge', 'endless'] as GameMode[]) {
+  for (const mode of ['classic', 'challenge', 'endless', 'sabotage'] as GameMode[]) {
     const gs = games.filter((g) => (g.mode ?? 'classic') === mode);
     byMode[mode] = {
       games: gs.length,

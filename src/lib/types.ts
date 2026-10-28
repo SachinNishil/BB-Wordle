@@ -60,6 +60,8 @@ interface PlayerViewBase {
   paused_ms?: number;
   /** Time on the clock when this was sent. */
   elapsed_ms?: number;
+  /** v1.21 Sabotage: 6, or 5 once Steal a row hit. */
+  max_guesses?: number;
 }
 export interface MeView extends PlayerViewBase {
   guesses: GuessRow[];
@@ -86,7 +88,7 @@ export interface Taunt {
 }
 
 /** v1.19: 'endless' = no limit on guesses, the first to find the word wins. */
-export type GameMode = 'classic' | 'challenge' | 'endless';
+export type GameMode = 'classic' | 'challenge' | 'endless' | 'sabotage';
 
 export interface GameView {
   id: string;
@@ -115,6 +117,36 @@ export interface GameView {
   taunts?: Taunt[];
   /** Soundboard emojis from the last minute (v1.9). */
   booms?: Taunt[];
+  /** v1.21: only in Sabotage games. */
+  sab?: SabView | null;
+}
+
+export type PowerId = 'fog' | 'quake' | 'dark' | 'mirror' | 'ban' | 'shuffle' | 'sticky' | 'ghost' | 'blind' | 'liar'
+  | 'delay' | 'amnesia' | 'freeze' | 'speed' | 'steal' | 'first' | 'shield' | 'bounce';
+
+export interface SabEvent {
+  id: number;
+  from: Slot;
+  to: Slot;
+  power: PowerId;
+  letter: string | null;
+  at: string;
+  expires_at: string | null;
+  expires_guess: number | null;
+  sent_guess: number;
+  blocked: boolean;
+  bounced: boolean;
+  used_up: boolean;
+  /** Still doing something to its target (or, for a Shield / Bounce back, still armed). */
+  active: boolean;
+}
+
+export interface SabView {
+  powers: PowerId[] | null;
+  used: PowerId[];
+  partner_ready: boolean;
+  cooldown_until: string | null;
+  events: SabEvent[];
 }
 
 export interface GameState {

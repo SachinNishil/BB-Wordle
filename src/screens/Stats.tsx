@@ -29,11 +29,12 @@ function Distribution({ s, color, plus = false }: { s: PlayerStats; color: strin
   );
 }
 
-type Mode = 'classic' | 'challenge' | 'endless' | 'solo';
+type Mode = 'classic' | 'challenge' | 'endless' | 'sabotage' | 'solo';
 const MODES: { id: Mode; label: string }[] = [
   { id: 'classic', label: 'Classic' },
   { id: 'challenge', label: 'Challenge ⚔️' },
   { id: 'endless', label: 'Endless ♾️' },
+  { id: 'sabotage', label: 'Sabotage 😈' },
   { id: 'solo', label: 'Solo' },
 ];
 type Row = { label: string; v: [string, string]; best: Slot | null };
@@ -85,6 +86,7 @@ const NOTES: Record<Mode, string> = {
   classic: 'Classic battles only: one random word, the same for both of you.',
   challenge: 'Challenge battles only: each of you solves the word the other picked.',
   endless: 'Endless races only: no limit on guesses, the first to find the word wins. Guess averages run higher here.',
+  sabotage: 'Sabotage battles only: Classic rules, plus three powers each.',
   solo: "Solo games only. They're kept apart from the battles.",
 };
 
@@ -105,7 +107,7 @@ export function StatsScreen() {
   const byMode = useMemo(() => {
     const of = (m: GameMode) => games.filter((g) => (g.mode ?? 'classic') === m);
     const st = (gs: HistoryGame[]) => ({ 1: playerStats(gs, 1), 2: playerStats(gs, 2) }) as Record<Slot, PlayerStats>;
-    return { classic: st(of('classic')), challenge: st(of('challenge')), endless: st(of('endless')) };
+    return { classic: st(of('classic')), challenge: st(of('challenge')), endless: st(of('endless')), sabotage: st(of('sabotage')) };
   }, [games]);
   const names = { 1: players[1].name, 2: players[2].name };
   const fun = useMemo(() => awards(games, names, fmtDuration, solo ?? [], soloHistory ?? []), [games, solo, soloHistory, names[1], names[2]]); // eslint-disable-line
@@ -163,9 +165,9 @@ export function StatsScreen() {
             {h.winStreak.slot && h.winStreak.length > 1 ? ` · ${names[h.winStreak.slot]} has won ${h.winStreak.length} in a row 🔥` : ''}
           </p>
           <div className="mode-split">
-            {(['classic', 'challenge', 'endless'] as const).filter((m) => m !== 'endless' || h.byMode.endless.games > 0).map((m) => (
+            {(['classic', 'challenge', 'endless', 'sabotage'] as const).filter((m) => (m !== 'endless' && m !== 'sabotage') || h.byMode[m].games > 0).map((m) => (
               <div key={m} className="mode-split-item">
-                <span className="mode-split-label">{m === 'classic' ? 'Classic' : m === 'challenge' ? 'Challenge ⚔️' : 'Endless ♾️'}</span>
+                <span className="mode-split-label">{m === 'classic' ? 'Classic' : m === 'challenge' ? 'Challenge ⚔️' : m === 'endless' ? 'Endless ♾️' : 'Sabotage 😈'}</span>
                 <span className="mode-split-score">
                   {names[1]} <b>{h.byMode[m].wins[1]}</b> · <b>{h.byMode[m].wins[2]}</b> {names[2]}
                 </span>

@@ -3,16 +3,33 @@ import { Icon } from './Icon';
 
 const ROWS = ['QWERTYUIOP', 'ASDFGHJKL', '+ZXCVBNM-'];
 
-export function Keyboard({ states, onKey, disabled, chat }: {
+/** v1.21 Shuffle: the same 26 letters in a new order (same row lengths), from a seed. */
+export function shuffledRows(seed: number) {
+  const letters = [...'QWERTYUIOPASDFGHJKLZXCVBNM'];
+  let x = seed % 2147483647 || 7;
+  for (let i = letters.length - 1; i > 0; i--) {
+    x = (x * 16807) % 2147483647;
+    const j = x % (i + 1);
+    [letters[i], letters[j]] = [letters[j], letters[i]];
+  }
+  const l = letters.join('');
+  return [l.slice(0, 10), l.slice(10, 19), '+' + l.slice(19) + '-'];
+}
+
+export function Keyboard({ states, onKey, disabled, chat, layout, banned }: {
   states: Record<string, KeyState>;
   onKey: (k: string) => void;
   disabled?: boolean;
   /** v1.8.1: the same keyboard types chat messages: SEND instead of ENTER, plus a space row. */
   chat?: boolean;
+  /** v1.21 Sabotage: Shuffle's letter order, and Banned letter's letter. */
+  layout?: string[];
+  banned?: string | null;
 }) {
+  const rows = layout ?? ROWS;
   return (
     <div className={`keyboard${disabled ? ' disabled' : ''}${chat ? ' chat' : ''}`} aria-label={chat ? 'Chat keyboard' : 'Keyboard'}>
-      {ROWS.map((row, r) => (
+      {rows.map((row, r) => (
         <div className="krow" key={r}>
           {r === 1 && <span className="kspacer" />}
           {[...row].map((k) => {
@@ -27,7 +44,8 @@ export function Keyboard({ states, onKey, disabled, chat }: {
                 </button>
               );
             return (
-              <button key={k} className={`key ${chat ? '' : states[k] ?? ''}`} onClick={() => onKey(k)} aria-label={`${k}${!chat && states[k] ? ' ' + states[k] : ''}`}>
+              <button key={k} className={`key ${chat ? '' : states[k] ?? ''}${banned === k ? ' banned' : ''}`} onClick={() => onKey(k)}
+                aria-label={`${k}${!chat && states[k] ? ' ' + states[k] : ''}${banned === k ? ' banned' : ''}`}>
                 {k}
               </button>
             );

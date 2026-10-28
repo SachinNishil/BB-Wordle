@@ -4,9 +4,10 @@ import { Board, REVEAL_MS } from '../components/Board';
 import { BadgeChips } from '../components/Badges';
 import { Countdown } from '../components/Countdown';
 import { Icon } from '../components/Icon';
-import { Keyboard } from '../components/Keyboard';
+import { Keyboard, shuffledRows } from '../components/Keyboard';
 import { PartnerMini, RoundElapsed, SideCard, WatchingEye } from '../components/Live';
 import { fromGameView, ResultsView } from '../components/Results';
+import { DarkOverlay, FreezeOverlay, partnerHitEmoji, PowerBar, PowerPicker, SabBanner, useIncoming, useSabNews } from '../components/Sabotage';
 import { HiddenWord, WordTiles } from '../components/Tiles';
 import { Soundboard, TrashTalk, useFeedTaunts } from '../components/TrashTalk';
 import { api, ApiError } from '../lib/api';
@@ -107,6 +108,25 @@ export function GameScreen({ id }: { id?: string }) {
 
   const phase = phaseOf(game, loaded);
   const endless = game?.mode === 'endless';
+  // v1.21 Sabotage: what's hitting me right now.
+  const sabotage = game?.mode === 'sabotage';
+  const incoming = useIncoming(sabotage ? game : null, slot);
+  useSabNews(sabotage ? game : null, slot, partner);
+  const sabRef = useRef(incoming);
+  sabRef.current = incoming;
+  // Ghost letter types itself in (once); Forced first puts its letter first.
+  const ghost = phase === 'playing' ? incoming.has('ghost') : null;
+  const ghostDone = useRef<number | null>(null);
+  useEffect(() => {
+    if (!ghost || ghostDone.current === ghost.id) return;
+    ghostDone.current = ghost.id;
+    const l = 'ABCDEFGHIJKLMNOPRSTUVWY'[Math.floor(Math.random() * 23)];
+    setTyped((t) => (t.length < 5 ? t + l : t));
+  }, [ghost]);
+  const forced = phase === 'playing' ? incoming.has('first') : null;
+  useEffect(() => {
+    if (forced?.letter && !typed.startsWith(forced.letter)) setTyped((t) => (forced.letter! + t).slice(0, 5));
+  }, [forced?.id, typed]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // v1.20: the waiting room is back (it lives right here, for all three modes).
 
@@ -389,9 +409,20 @@ export function GameScreen({ id }: { id?: string }) {
         return;
       }
       if (phase !== 'playing' || submitting || revealing) return;
+      const sab = sabRef.current;
+      if (sab.has('freeze')) return;
       if (k === 'Enter') void submit();
-      else if (k === 'Backspace') setTyped((t) => t.slice(0, -1));
-      else if (/^[a-z]$/i.test(k)) setTyped((t) => (t.length < 5 ? t + k.toUpperCase() : t));
+      else if (k === 'Backspace') {
+        const f = sab.has('first');
+        setTyped((t) => (f && t.length <= 1 ? t : t.slice(0, -1)));
+      } else if (/^[a-z]$/i.test(k)) {
+        const L = k.toUpperCase();
+        const ban = sab.has('ban');
+        if (ban && ban.letter === L) { navigator.vibrate?.(60); return; }
+        const sticky = sab.has('sticky');
+        const add = sticky && sticky.letter === L ? L + L : L;
+        setTyped((t) => (t + add).slice(0, 5));
+      }
     },
     [phase, submitting, revealing, submit, picking, submitPick],
   );
@@ -506,12 +537,13 @@ export function GameScreen({ id }: { id?: string }) {
 
   if (inRoom && game) {
     const partnerIn = !!game.partner.joined_at && game.partner.here;
-    const emoji = game.mode === 'challenge' ? '⚔️' : game.mode === 'endless' ? '♾️' : '🟩';
+    const emoji = game.mode === 'challenge' ? '⚔️' : game.mode === 'endless' ? '♾️' : game.mode === 'sabotage' ? '😈' : '🟩';
+    const ready = !sabotage || (!!game.sab?.powers && game.sab.partner_ready);
     return (
       <div className="screen waiting room">
         <header className="topbar">
           <button className="iconbtn" onClick={() => go('/', true)} aria-label="Back"><Icon name="back" /></button>
-          <h1 className="topbar-title">{game.mode === 'challenge' ? 'Challenge ⚔️' : game.mode === 'endless' ? 'Endless ♾️' : 'Classic'}</h1>
+          <h1 className="topbar-title">{game.mode === 'challenge' ? 'Challenge ⚔️' : game.mode === 'endless' ? 'Endless ♾️' : sabotage ? 'Sabotage 😈' : 'Classic'}</h1>
           <div className="topbar-right" />
         </header>
         <div className="waiting-body">
@@ -520,7 +552,8 @@ export function GameScreen({ id }: { id?: string }) {
             <span className="beat" aria-hidden="true">{emoji}</span>
             <span className={`room-seat${partnerIn ? ' in' : ''}`}><Avatar player={partner} size={84} ring={partnerIn} />{partnerIn && <span className="room-tick">✓</span>}</span>
           </div>
-          <h2 className="waiting-title" role="status">{partnerIn ? (game.mode === 'challenge' ? 'Both in!' : 'Starting…') : <>Waiting for {partner.name}<span className="room-dots" aria-hidden="true"><i /><i /><i /></span></>}</h2>
+          <h2 className="waiting-title" role="status">{partnerIn ? (game.mode === 'challenge' ? 'Both in!' : ready ? 'Starting…' : 'Both in!') : <>Waiting for {partner.name}<span className="room-dots" aria-hidden="true"><i /><i /><i /></span></>}</h2>
+          {sabotage && slot && <PowerPicker game={game} slot={slot} partner={partner} onGame={apply} />}
           <button className="btn text" onClick={cancel} disabled={busy}>Cancel</button>
         </div>
       </div>
@@ -656,15 +689,20 @@ export function GameScreen({ id }: { id?: string }) {
   }
 
   const guesses = game.me.guesses;
-  const keyStates = keyboardStates(revealing ? guesses.slice(0, revealRow!) : guesses);
   const finishedView = phase === 'finished' && !revealing;
+  const live = phase === 'playing';
+  const hit = (p: Parameters<typeof incoming.has>[0]) => (live ? incoming.has(p) : null);
+  const keyStates = hit('amnesia') ? {} : keyboardStates(revealing ? guesses.slice(0, revealRow!) : guesses);
+  const shuffle = hit('shuffle');
+  const freeze = hit('freeze');
+  const sabClass = sabotage ? ['fog', 'quake', 'mirror'].filter((p) => hit(p as 'fog')).map((p) => ` sab-${p}`).join('') : '';
 
   return (
-    <div className="screen game">
+    <div className={`screen game${sabotage ? ' sabotage' : ''}${sabClass}`}>
       <header className="topbar">
         <button className="iconbtn" onClick={() => back('/')} aria-label="Back"><Icon name="back" /></button>
         <h1 className="topbar-title">
-          {game.mode === 'challenge' ? 'Challenge ⚔️' : endless ? `Endless ♾️` : `Game #${game.number}`}
+          {game.mode === 'challenge' ? 'Challenge ⚔️' : endless ? `Endless ♾️` : sabotage ? 'Sabotage 😈' : `Game #${game.number}`}
           {game.me.started_at && <span className="topbar-clock"> · <RoundElapsed r={game.me} /></span>}
           {partnerWatching && <WatchingEye name={partner.name} />}
         </h1>
@@ -678,16 +716,17 @@ export function GameScreen({ id }: { id?: string }) {
       {/* v1.7 experiment: chat on the left (my own card just repeated my board), partner on the right. */}
       {/* v1.9: while you're playing, the box above the board is an emoji soundboard. */}
       <div className="vs-strip chat-strip">
-        {slot && <Soundboard game={game} slot={slot} />}
-        <PartnerMini player={partner} view={game.partner} endless={endless} />
+        {slot && (sabotage ? <PowerBar game={game} slot={slot} partner={partner} onGame={apply} /> : <Soundboard game={game} slot={slot} />)}
+        <PartnerMini player={partner} view={game.partner} endless={endless} badge={sabotage && slot ? partnerHitEmoji(game.sab?.events, slot) : null} />
       </div>
+      {sabotage && live && <SabBanner incoming={incoming} partner={partner} />}
       <>
       {game.partner.status === 'solved' && game.me.status !== 'solved' && game.me.status !== 'failed' && (
         <p className="partner-news">{game.mode === 'challenge' ? `🏆 ${partner.name} has solved the word you picked.` : "🏆 Your partner has solved today's word."}</p>
       )}
 
       <Board guesses={guesses} current={typed} revealRow={revealRow} shake={shake} bounceRow={bounceRow} endless={endless}
-        active={phase === 'playing' || phase === 'countdown'} />
+        active={phase === 'playing' || phase === 'countdown'} locked={sabotage ? 6 - (game.me.max_guesses ?? 6) : 0} />
 
       {finishedView ? (
         <div className="finished-panel">
@@ -713,9 +752,12 @@ export function GameScreen({ id }: { id?: string }) {
           <button className="btn ghost" onClick={() => go('/', true)}>Back home</button>
         </div>
       ) : (
-        <Keyboard states={keyStates} onKey={onKey} disabled={phase !== 'playing' || submitting} />
+        <Keyboard states={keyStates} onKey={onKey} disabled={phase !== 'playing' || submitting || !!freeze}
+          layout={shuffle ? shuffledRows(shuffle.id * 7919) : undefined} banned={hit('ban')?.letter ?? null} />
       )}
       </>
+      {hit('dark') && <DarkOverlay />}
+      {freeze?.expires_at && <FreezeOverlay until={Date.parse(freeze.expires_at)} />}
 
       {phase === 'countdown' && cdTarget && (
         <Countdown target={cdTarget} onGo={begin}

@@ -82,7 +82,7 @@ function GameCard() {
   return <ActiveCard game={active} me={me} partner={partner} />;
 }
 
-const MODE_LABEL: Record<GameMode, string> = { classic: 'Classic', challenge: 'Challenge ⚔️', endless: 'Endless ♾️' };
+const MODE_LABEL: Record<GameMode, string> = { classic: 'Classic', challenge: 'Challenge ⚔️', endless: 'Endless ♾️', sabotage: 'Sabotage 😈' };
 
 function ActiveCard({ game, me, partner }: { game: GameView; me: Player; partner: Player }) {
   const mineDone = game.me.status === 'solved' || game.me.status === 'failed';

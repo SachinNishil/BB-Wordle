@@ -9,6 +9,16 @@ export interface Release {
 
 export const VERSIONS: Release[] = [
   {
+    version: '1.21.0',
+    date: '2026-10-28',
+    changes: [
+      'New mode: Sabotage 😈. Classic rules (same word, six guesses), plus three powers each to throw at the other one. Pick them in the waiting room: three at random, or any three you like.',
+      'Eighteen powers: Fog, Earthquake, Lights out, Mirror, Banned letter, Shuffle, Sticky key, Ghost letter, Colour blind, Liar tile, Delayed reveal, Keyboard amnesia, Freeze, Speed trap, Steal a row, Forced first, and for defence Shield and Bounce back.',
+      'Each power works once, there is one every 30 seconds at most, and only one sabotage can be on someone at a time. You see what hit you and who sent it; they see an emoji on your mini board while it lasts.',
+      'Sabotage has its own tab in Stats and its own tile on Home, next to Endless.',
+    ],
+  },
+  {
     version: '1.20.1',
     date: '2026-10-28',
     changes: [

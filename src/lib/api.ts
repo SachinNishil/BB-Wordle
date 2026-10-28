@@ -1,6 +1,6 @@
 import { syncClock } from './clock';
 import { supabase } from './supabase';
-import type { GameMode, GameState, GuessResult, HistoryGame, Room, Slot, SoloState, SoloStats, SoloView, WordSettingsInfo } from './types';
+import type { GameMode, GameState, GuessResult, PowerId, HistoryGame, Room, Slot, SoloState, SoloStats, SoloView, WordSettingsInfo } from './types';
 
 /** An error from the server, with a code from supabase/schema.sql (e.g. "not_a_word"). */
 export class ApiError extends Error {
@@ -38,6 +38,19 @@ const FRIENDLY: Record<string, string> = {
   dictionary_outdated: 'The word list needs updating. Run the new dictionary.sql in Supabase.',
   bad_status: 'Keep it to 80 characters.',
   too_many_guesses: "That's 100 guesses. Time to give up?",
+  frozen: "You're frozen ❄️ Hang on a few seconds.",
+  banned_letter: 'That letter is banned for this guess 🚫',
+  forced_letter: 'Your guess has to start with the forced letter',
+  cooldown: 'Give it a moment: one power every 30 seconds',
+  partner_busy: 'They already have a sabotage on them. Wait for it to wear off.',
+  power_used: 'You already used that one',
+  power_not_yours: "That isn't one of your powers",
+  partner_done: 'Their round is already over',
+  not_playing: 'Powers only work while you are playing',
+  already_armed: 'You already have a defence armed',
+  pick_three: 'Pick three different powers',
+  powers_locked: 'Powers are locked once the countdown starts',
+  bad_letter: 'Pick another letter',
   telegram_not_set_up: 'Telegram is not set up yet (see the README).',
   telegram_unavailable: 'Turn on the pg_net extension in Supabase first (Database › Extensions).',
 };
@@ -95,6 +108,10 @@ export const api = {
     call<GameState>('join_game', { ...K, p_slot: slot, p_game_id: gameId, p_play_now: playNow }),
   pauseRound: (slot: Slot, gameId: string, paused: boolean) =>
     call<GameState>('pause_round', { ...K, p_slot: slot, p_game_id: gameId, p_paused: paused }),
+  sabotageLoadout: (slot: Slot, gameId: string, powers: PowerId[] | null) =>
+    call<GameState>('sabotage_loadout', { ...K, p_slot: slot, p_game_id: gameId, p_powers: powers }),
+  sabotageSend: (slot: Slot, gameId: string, power: PowerId, letter: string | null = null) =>
+    call<GameState & { blocked?: boolean; bounced?: boolean }>('sabotage_send', { ...K, p_slot: slot, p_game_id: gameId, p_power: power, p_letter: letter }),
   lobby: (slot: Slot, gameId: string, here = true) =>
     call<GameState>('lobby', { ...K, p_slot: slot, p_game_id: gameId, p_here: here }),
   beginRound: (slot: Slot, gameId: string) => call<GameState>('begin_round', { ...K, p_slot: slot, p_game_id: gameId }),

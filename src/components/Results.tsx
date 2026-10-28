@@ -71,7 +71,7 @@ export function shareText(d: ResultData, players: Record<Slot, Player>) {
   };
   const board = (slot: Slot) => `${players[slot].name}\n${d.sides[slot].patterns.map((p) => patternToEmoji(p)).join('\n')}`;
   const head = d.result === 'draw' ? 'Draw!' : d.result === 'both_failed' ? 'The word won 😅' : '';
-  const title = d.mode === 'challenge' ? `Wordle for two #${d.number} · Challenge ⚔️` : d.mode === 'endless' ? `Wordle for two #${d.number} · Endless ♾️` : `Wordle for two #${d.number}`;
+  const title = d.mode === 'challenge' ? `Wordle for two #${d.number} · Challenge ⚔️` : d.mode === 'endless' ? `Wordle for two #${d.number} · Endless ♾️` : d.mode === 'sabotage' ? `Wordle for two #${d.number} · Sabotage 😈` : `Wordle for two #${d.number}`;
   return [title, head, line(1), line(2), '', board(1), '', board(2)].filter((x, i) => x || i > 1).join('\n');
 }
 
@@ -111,7 +111,7 @@ export function ResultsView({ data, title, isToday }: { data: ResultData; title?
     <div className="results">
       <p className="eyebrow">{title ?? (data.mode === 'challenge'
         ? `Challenge ⚔️ · ${isToday ? "today's words" : `game #${data.number} · ${fmtDate(data.date, { day: 'numeric', month: 'long' })}`}`
-        : `${data.mode === 'endless' ? 'Endless ♾️ · ' : ''}${isToday ? "Today's word" : `Game #${data.number} · ${fmtDate(data.date, { weekday: 'long', day: 'numeric', month: 'long' })}`}`)}</p>
+        : `${data.mode === 'endless' ? 'Endless ♾️ · ' : data.mode === 'sabotage' ? 'Sabotage 😈 · ' : ''}${isToday ? "Today's word" : `Game #${data.number} · ${fmtDate(data.date, { weekday: 'long', day: 'numeric', month: 'long' })}`}`)}</p>
       {data.mode === 'challenge' ? (
         <div className="challenge-words">
           {slots.map((s) => (

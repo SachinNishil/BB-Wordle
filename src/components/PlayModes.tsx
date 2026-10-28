@@ -28,7 +28,7 @@ function Faces({ people }: { people: Player[] }) {
   if (!people.length) return null;
   return (
     <span className="mode-faces" aria-hidden="true">
-      {people.map((p) => <Avatar key={p.slot} player={p} size={30} ring />)}
+      {people.map((p) => <Avatar key={p.slot} player={p} size={24} ring />)}
     </span>
   );
 }
@@ -57,6 +57,10 @@ export function PlayModes({ partner, starting, start, pending, enter }: Props) {
         <button className={`pa-mini${state('endless')}`} onClick={() => tap('endless')} disabled={off('endless')} aria-label={`Endless race${label('endless')}`}>
           <span className="pa-emoji">♾️</span><span>{starting === 'endless' ? 'Picking…' : 'Endless'}</span>
           {faces('endless')}
+        </button>
+        <button className={`pa-mini${state('sabotage')}`} onClick={() => tap('sabotage')} disabled={off('sabotage')} aria-label={`Sabotage battle${label('sabotage')}`}>
+          <span className="pa-emoji">😈</span><span>{starting === 'sabotage' ? 'Picking…' : 'Sabotage'}</span>
+          {faces('sabotage')}
         </button>
       </div>
     </section>
