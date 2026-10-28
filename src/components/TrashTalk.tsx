@@ -8,6 +8,7 @@ import { api } from '../lib/api';
 import { feedTaunts, onNewTaunts } from '../lib/tauntFeed';
 import type { GameView, Player, Slot, Taunt } from '../lib/types';
 import { go } from '../router';
+import { onKeyboard } from '../lib/keyboard';
 import { useStore } from '../store';
 import { Avatar } from './Avatar';
 import { Icon } from './Icon';
@@ -151,11 +152,13 @@ export function ChatPanel({ game, slot, players, draft, onSent, sendNow, onClose
 }
 
 /**
- * v1.20: the chat sheet that pops up over everything, sitting right on top of the phone
- * keyboard: the whole conversation, the emojis and the box you type in, all in view.
- * Nothing in it takes the focus off the box, so the keyboard stays up between messages.
+ * v1.20: the chat that pops up right on top of the phone keyboard while you type: the last
+ * few messages, the emojis and the box you type in, all in view. Nothing in it takes the
+ * focus off the box, so the keyboard stays up between messages. v1.20.1: it only lives while
+ * the keyboard is up; when the keyboard goes down (or you tap away) it closes and the screen
+ * underneath is just as it was, with whatever you'd typed still in the box.
  */
-export function TypeSheet({ taunts, slot, players, sending, send, onClose, inputRef, loading = false }: {
+export function TypeSheet({ taunts, slot, players, sending, send, onClose, inputRef, text, setText, loading = false }: {
   taunts: Taunt[];
   slot: Slot;
   players: Record<Slot, Player>;
@@ -164,35 +167,45 @@ export function TypeSheet({ taunts, slot, players, sending, send, onClose, input
   send: (body: string) => Promise<boolean>;
   onClose: () => void;
   inputRef: React.RefObject<HTMLInputElement | null>;
+  text: string;
+  setText: (t: string) => void;
   loading?: boolean;
 }) {
-  const [text, setText] = useState('');
   const [showLines, setShowLines] = useState(false);
   const partner = players[(3 - slot) as Slot];
+  const shown = taunts.slice(-6);
   const last = taunts[taunts.length - 1];
   const lastMine = last && last.from === slot ? last : null;
   const logRef = useRef<HTMLDivElement>(null);
+  const sheetRef = useRef<HTMLDivElement>(null);
   const keepFocus = (e: { preventDefault: () => void }) => e.preventDefault();
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   useLayoutEffect(() => {
     const el = logRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [taunts.length, lastMine?.seen]);
-  // The sheet shrinks as the keyboard comes up: keep the newest message in view.
-  useEffect(() => {
-    const el = logRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(() => { el.scrollTop = el.scrollHeight; });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [taunts.length > 0]); // eslint-disable-line react-hooks/exhaustive-deps
   // Their messages land in the open chat, so no pop-up bubbles on top of it.
   useEffect(() => {
     document.documentElement.classList.add('typing-open');
     return () => document.documentElement.classList.remove('typing-open');
   }, []);
+  // Keyboard down = back to the normal screen.
+  useEffect(() => {
+    let up = false;
+    return onKeyboard((px) => {
+      if (px > 80) up = true;
+      else if (up && px < 40) closeRef.current();
+    });
+  }, []);
   function close() {
     inputRef.current?.blur();
     onClose();
+  }
+  function blurred() {
+    setTimeout(() => {
+      if (!sheetRef.current?.contains(document.activeElement)) closeRef.current();
+    }, 150);
   }
   async function go(body: string, typed = false) {
     const b = body.trim();
@@ -202,19 +215,18 @@ export function TypeSheet({ taunts, slot, players, sending, send, onClose, input
       if (typed) setText('');
       setShowLines(false);
     }
-    // Still typing? The keyboard stays up for the next one.
-    if (typed || document.activeElement === document.body) inputRef.current?.focus();
+    inputRef.current?.focus();
   }
   return createPortal(
     <div className="type-overlay" onPointerDown={(e) => { if (e.target === e.currentTarget) { e.preventDefault(); close(); } }}>
-      <div className="type-sheet" role="dialog" aria-label={`Chat with ${partner.name}`}>
+      <div className="type-sheet" ref={sheetRef} role="dialog" aria-label={`Chat with ${partner.name}`}>
         <div className="chat-head">
           <span className="chat-title"><Avatar player={partner} size={22} /> {partner.name}</span>
           <button type="button" className="btn text small" onMouseDown={keepFocus} onClick={close}>Done</button>
         </div>
-        {taunts.length ? (
+        {shown.length ? (
           <div className="trash-log" ref={logRef}>
-            {taunts.map((t) => (
+            {shown.map((t) => (
               <p key={t.id} className={`trash-msg ${t.from === slot ? 'mine' : 'theirs'}${isEmojiOnly(t.body) ? ' emoji' : ''}`}>
                 {t.from !== slot && <Avatar player={players[t.from]} size={18} />}
                 <span>{t.body}</span>
@@ -242,7 +254,7 @@ export function TypeSheet({ taunts, slot, players, sending, send, onClose, input
           {/* Enter is handled here, not as a form submit: on iPhones a submit closes the keyboard. */}
           <input ref={inputRef} className="text-input trash-input" value={text} maxLength={TAUNT_MAX} onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void go(text, true); } if (e.key === 'Escape') close(); }}
-            placeholder={`Message ${partner.name}…`} aria-label="Trash talk message" enterKeyHint="send" autoComplete="off" />
+            onBlur={blurred} placeholder={`Message ${partner.name}…`} aria-label="Chat message" enterKeyHint="send" autoComplete="off" />
           <button type="button" className="trash-send" onMouseDown={keepFocus} onClick={() => go(text, true)} disabled={sending || !text.trim()} aria-label="Send">
             <Icon name="send" size={18} />
           </button>
@@ -297,6 +309,7 @@ export function TrashTalk<T extends Talk>({ game, slot, players, onGame, variant
   solo?: boolean;
 }) {
   const { send: sendTo, sending } = useTalkSender<T>(slot, solo, onGame);
+  const [text, setText] = useState('');
   const [showLines, setShowLines] = useState(false);
   const [typing, setTyping] = useState(false);
   const partner = players[(3 - slot) as Slot];
@@ -305,7 +318,7 @@ export function TrashTalk<T extends Talk>({ game, slot, players, onGame, variant
   const last = taunts[taunts.length - 1];
   const lastMine = last && last.from === slot ? last : null;
   const logRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const sheetInput = useRef<HTMLInputElement>(null);
   const send = (b: string) => sendTo(game, b);
 
   useEffect(() => {
@@ -313,15 +326,20 @@ export function TrashTalk<T extends Talk>({ game, slot, players, onGame, variant
     if (el) el.scrollTop = el.scrollHeight;
   }, [taunts.length]);
 
-  /** Open the typing sheet and focus its box in the same tap (iPhones only raise the keyboard then). */
+  /** v1.20.1: tapping the box (the same box as always) brings up the chat over the keyboard,
+   *  focused in the same tap (iPhones only raise the keyboard then). */
   function openTyping() {
+    if (typing) return;
     flushSync(() => setTyping(true));
-    inputRef.current?.focus();
+    sheetInput.current?.focus();
+  }
+  async function sendHere(body: string) {
+    if (await send(body)) { if (body === text) setText(''); setShowLines(false); }
   }
 
   return (
     <div className={`trash ${variant}`}>
-      {variant === 'card' && <p className="eyebrow">Trash talk</p>}
+      {variant === 'card' && <p className="eyebrow">Chat</p>}
       {variant === 'sheet' && (
         <div className="chat-head">
           <span className="chat-title"><Avatar player={partner} size={22} /> Chat with {partner.name}</span>
@@ -339,32 +357,31 @@ export function TrashTalk<T extends Talk>({ game, slot, players, onGame, variant
           {lastMine && <span className={`trash-seen${lastMine.seen ? ' yes' : ''}`}>{lastMine.seen ? `Seen by ${partner.name} ✓` : 'Sent'}</span>}
         </div>
       )}
-      {variant !== 'dock' && recent.length === 0 && <p className="muted small">No trash talk this game. Yet.</p>}
+      {variant !== 'dock' && recent.length === 0 && <p className="muted small">No chat this game. Yet.</p>}
       {/* v1.13: emojis and quick lines from here never bring the keyboard up. */}
       <div className="trash-emojis" role="group" aria-label="Send an emoji">
         {TAUNT_EMOJIS.map((e) => (
-          <button key={e} type="button" className="trash-emoji" onClick={() => send(e)} disabled={sending} aria-label={`Send ${e}`}>{e}</button>
+          <button key={e} type="button" className="trash-emoji" onClick={() => sendHere(e)} disabled={sending} aria-label={`Send ${e}`}>{e}</button>
         ))}
       </div>
       {showLines && (
         <div className="trash-lines" role="group" aria-label="Quick lines">
           {TAUNT_LINES.map((l) => (
-            <button key={l} type="button" className="trash-line" onClick={async () => { if (await send(l)) setShowLines(false); }} disabled={sending}>{l}</button>
+            <button key={l} type="button" className="trash-line" onClick={() => sendHere(l)} disabled={sending}>{l}</button>
           ))}
         </div>
       )}
-      <div className="trash-compose">
+      <form className="trash-compose" onSubmit={(e) => { e.preventDefault(); void sendHere(text); }}>
         <button type="button" className={`trash-more${showLines ? ' on' : ''}`} onClick={() => setShowLines((x) => !x)}
           aria-label="Quick lines" aria-expanded={showLines}>💬</button>
-        {/* A stand-in: tapping it opens the typing sheet over the keyboard. */}
-        <button type="button" className="text-input trash-input trash-fake empty" onClick={openTyping} aria-label="Type a message">
-          Say something to {partner.name}…
-        </button>
-        <button type="button" className="trash-send" onClick={openTyping} aria-label="Write a message">
+        <input className="text-input trash-input" value={text} maxLength={TAUNT_MAX} onChange={(e) => setText(e.target.value)}
+          onFocus={openTyping} placeholder={`Say something to ${partner.name}…`} aria-label="Type a message" enterKeyHint="send" />
+        <button type="submit" className="trash-send" disabled={sending || !text.trim()} aria-label="Send">
           <Icon name="send" size={18} />
         </button>
-      </div>
-      {typing && <TypeSheet taunts={taunts} slot={slot} players={players} sending={sending} send={send} inputRef={inputRef} onClose={() => setTyping(false)} />}
+      </form>
+      {typing && <TypeSheet taunts={taunts} slot={slot} players={players} sending={sending} send={send} inputRef={sheetInput}
+        text={text} setText={setText} onClose={() => setTyping(false)} />}
     </div>
   );
 }
@@ -415,6 +432,7 @@ interface Bubble { id: number; body: string; emoji: boolean; x: number; leaving?
 function ReplySheet({ id, inputRef, onClose }: { id: string; inputRef: React.RefObject<HTMLInputElement | null>; onClose: () => void }) {
   const { slot, players } = useStore();
   const [talk, setTalk] = useState<{ solo: boolean; t: Talk } | null>(null);
+  const [text, setText] = useState('');
   const { send, sending } = useTalkSender<Talk>(slot, talk?.solo ?? false, (t) => setTalk((x) => (x ? { ...x, t } : x)));
   useEffect(() => {
     if (!slot) return;
@@ -433,7 +451,7 @@ function ReplySheet({ id, inputRef, onClose }: { id: string; inputRef: React.Ref
   }, [slot, id]);
   if (!slot) return null;
   return (
-    <TypeSheet taunts={talk?.t.taunts ?? []} slot={slot} players={players} sending={sending} loading={!talk}
+    <TypeSheet taunts={talk?.t.taunts ?? []} slot={slot} players={players} sending={sending} loading={!talk} text={text} setText={setText}
       send={(b) => send(talk?.t ?? null, b)} inputRef={inputRef} onClose={onClose} />
   );
 }

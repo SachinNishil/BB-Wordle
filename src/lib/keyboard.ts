@@ -28,8 +28,17 @@ function place() {
 }
 
 /** --kbv: how much of the bottom of the window the keyboard covers, on every phone. */
+let kbv = 0;
 function setKbv(px: number) {
-  document.documentElement.style.setProperty('--kbv', `${Math.max(0, Math.round(px))}px`);
+  const v = Math.max(0, Math.round(px));
+  document.documentElement.style.setProperty('--kbv', `${v}px`);
+  if (v !== kbv) { kbv = v; window.dispatchEvent(new CustomEvent('bbw-kb', { detail: v })); }
+}
+/** v1.20.1: tell me when the phone keyboard opens or closes (height in px; 0 = closed). */
+export function onKeyboard(fn: (px: number) => void) {
+  const h = (e: Event) => fn((e as CustomEvent<number>).detail);
+  window.addEventListener('bbw-kb', h);
+  return () => window.removeEventListener('bbw-kb', h);
 }
 
 export function initKeyboard() {

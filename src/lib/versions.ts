@@ -9,6 +9,15 @@ export interface Release {
 
 export const VERSIONS: Release[] = [
   {
+    version: '1.20.1',
+    date: '2026-10-28',
+    changes: [
+      'The chat after a game looks the way it used to again (trash talk is now just "Chat"). Tap the box and the last few messages, the emojis and the box pop up right above the keyboard; when the keyboard goes down, it\'s back to the usual screen with your draft still in the box.',
+      'A slimmer Classic tile on Home.',
+      'Stats and History always open at the top.',
+    ],
+  },
+  {
     version: '1.20.0',
     date: '2026-10-28',
     changes: [

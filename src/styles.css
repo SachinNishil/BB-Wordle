@@ -957,7 +957,7 @@ html.kb-open body { padding-bottom: var(--kb, 0px); }
 
 /* --------------------------------------------------------------- typing sheet (v1.20) */
 /* Sits right on top of the phone keyboard: the whole chat, emojis and the box you type in. */
-.type-overlay { position: fixed; inset: 0; z-index: 45; background: rgba(10, 6, 3, 0.45); animation: fade 140ms ease; }
+.type-overlay { position: fixed; inset: 0; z-index: 45; background: rgba(10, 6, 3, 0.3); animation: fade 140ms ease; }
 .type-sheet {
   position: absolute; left: 0; right: 0; bottom: var(--kbv, 0px); max-width: 520px; margin: 0 auto;
   max-height: calc(100dvh - var(--kbv, 0px) - var(--safe-top) - 24px); min-height: 0;
@@ -966,7 +966,7 @@ html.kb-open body { padding-bottom: var(--kb, 0px); }
   transition: bottom 120ms ease; animation: rise 220ms cubic-bezier(.2, 1, .3, 1);
 }
 html.kb-open .type-sheet, .type-sheet:focus-within { padding-bottom: 10px; }
-.type-sheet .trash-log { flex: 0 1 auto; min-height: 60px; max-height: 42dvh; overflow-y: auto; padding: 2px; }
+.type-sheet .trash-log { flex: 0 1 auto; min-height: 0; max-height: 38dvh; overflow-y: auto; padding: 2px; }
 .type-sheet .chat-head, .type-sheet .trash-emojis, .type-sheet .trash-lines, .type-sheet .trash-compose { flex: none; }
 .type-sheet .chat-empty { margin: 8px 0; }
 html.typing-open .taunt-layer .taunt-bubble { display: none; }
@@ -1001,13 +1001,13 @@ a.btn { text-decoration: none; }
 .play-a { display: flex; flex-direction: column; gap: 12px; }
 /* Classic: one chunky Wordle tile you press down. */
 .ca2 {
-  position: relative; display: flex; align-items: center; justify-content: center; gap: 14px; height: 100px; border: 0; border-radius: 16px;
-  background: var(--green); color: #fff; box-shadow: 0 7px 0 color-mix(in srgb, var(--green) 55%, #000), 0 18px 30px -14px rgba(0, 0, 0, 0.7);
-  margin-bottom: 7px; transition: transform 90ms ease, box-shadow 90ms ease, opacity 200ms ease;
+  position: relative; display: flex; align-items: center; justify-content: center; gap: 12px; height: 68px; border: 0; border-radius: 14px;
+  background: var(--green); color: #fff; box-shadow: 0 5px 0 color-mix(in srgb, var(--green) 55%, #000), 0 14px 24px -12px rgba(0, 0, 0, 0.7);
+  margin-bottom: 5px; transition: transform 90ms ease, box-shadow 90ms ease, opacity 200ms ease;
 }
-.ca2:active:not(:disabled) { transform: translateY(6px); box-shadow: 0 1px 0 color-mix(in srgb, var(--green) 55%, #000), 0 8px 16px -10px rgba(0, 0, 0, 0.7); }
-.ca2-label { font-weight: 900; font-size: 2.1rem; letter-spacing: 0.14em; text-shadow: 0 2px 0 rgba(0, 0, 0, 0.15); }
-.ca2-play { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; background: rgba(255, 255, 255, 0.22); font-size: 1rem; }
+.ca2:active:not(:disabled) { transform: translateY(4px); box-shadow: 0 1px 0 color-mix(in srgb, var(--green) 55%, #000), 0 8px 16px -10px rgba(0, 0, 0, 0.7); }
+.ca2-label { font-weight: 900; font-size: 1.55rem; letter-spacing: 0.14em; text-shadow: 0 2px 0 rgba(0, 0, 0, 0.15); }
+.ca2-play { width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; background: rgba(255, 255, 255, 0.22); font-size: 1rem; }
 .pa-duo { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .pa-mini {
   position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 16px; border: 0; border-radius: var(--radius-sm);

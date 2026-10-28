@@ -1,3 +1,4 @@
+import { useLayoutEffect } from 'react';
 import { Toasts } from './components/Toasts';
 import { TauntLayer } from './components/TrashTalk';
 import { isConfigured } from './lib/config';
@@ -15,7 +16,9 @@ import { StoreProvider, useStore } from './store';
 
 function Routes() {
   const { slot } = useStore();
-  const { parts } = useRoute();
+  const { parts, path } = useRoute();
+  // v1.20.1: every screen opens at the top (Stats and History used to keep Home's scroll).
+  useLayoutEffect(() => { window.scrollTo(0, 0); }, [path]);
   if (!slot) return <WhoAreYou />;
   switch (parts[0]) {
     case 'game':
