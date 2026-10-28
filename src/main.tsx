@@ -1,12 +1,14 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
+import { applyKbScale } from './lib/kbSize';
 import { initKeyboard } from './lib/keyboard';
 import { applyTheme } from './lib/theme';
 import { startUpdates } from './lib/updates';
 import './styles.css';
 
 applyTheme();
+applyKbScale();
 initKeyboard();
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => applyTheme());
 

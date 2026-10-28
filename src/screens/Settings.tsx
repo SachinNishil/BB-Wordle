@@ -1,12 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import { Avatar } from '../components/Avatar';
+import { Board } from '../components/Board';
 import { Icon } from '../components/Icon';
+import { Keyboard } from '../components/Keyboard';
+import { PartnerMini } from '../components/Live';
+import { SOUNDBOARD } from '../components/TrashTalk';
+import { getKbScale, KB_MAX, KB_MIN, setKbScale } from '../lib/kbSize';
 import { TopBar } from '../components/TopBar';
 import { api, type TelegramStatus } from '../lib/api';
 import { APP_VERSION } from '../lib/config';
 import { photoToDataUrl } from '../lib/photo';
 import { getTheme, setTheme, type ThemeChoice } from '../lib/theme';
-import type { Slot, WordSettings, WordSettingsInfo } from '../lib/types';
+import type { PartnerView, Slot, WordSettings, WordSettingsInfo } from '../lib/types';
 import { go } from '../router';
 import { useStore } from '../store';
 
@@ -226,6 +231,47 @@ function TelegramInvites() {
   );
 }
 
+/** v1.20: how big the Wordle keyboard is, with a live preview of the game screen. */
+const SAMPLE = [{ word: 'CRANE', pattern: 'XYXXG' }, { word: 'SOUTH', pattern: 'XXXYX' }];
+const SAMPLE_KEYS: Record<string, 'correct' | 'present' | 'absent'> = { C: 'absent', R: 'present', A: 'absent', N: 'absent', E: 'correct', S: 'absent', O: 'absent', U: 'absent', T: 'present', H: 'absent' };
+function KeyboardSize() {
+  const { players, slot } = useStore();
+  const [v, setV] = useState(getKbScale());
+  const W = Math.min(window.innerWidth, 520);
+  const H = window.innerHeight;
+  const scale = 168 / W;
+  const partner = players[(3 - (slot ?? 1)) as Slot];
+  const view = { slot: 3 - (slot ?? 1), status: 'playing', patterns: ['XXYXX', 'GXXYX'], guesses: null, paused: false, paused_ms: 0,
+    elapsed_ms: 83000, started_at: null, guess_count: 2 } as unknown as PartnerView;
+  const pct = Math.round(v * 100);
+  return (
+    <section className="card kb-size">
+      <h3>Keyboard size</h3>
+      <div className="kb-size-row">
+        <div className="kb-size-controls">
+          <p className="kb-size-value">{pct}%</p>
+          <input type="range" className="kb-range" min={KB_MIN} max={KB_MAX} step={0.05} value={v} aria-label="Keyboard size"
+            onChange={(e) => { const x = Number(e.target.value); setV(x); setKbScale(x); }} />
+          <div className="kb-size-ends"><span>Smaller</span><span>Bigger</span></div>
+          {v !== 1 && <button className="btn text small" onClick={() => { setV(1); setKbScale(1); }}>Reset</button>}
+        </div>
+        {/* The real game screen, shrunk: the board takes whatever room the keyboard leaves. */}
+        <div className="kb-preview" style={{ width: W * scale, height: H * scale }} aria-hidden="true">
+          <div className="kb-preview-screen screen game" style={{ width: W, height: H, transform: `scale(${scale})` }}>
+            <header className="topbar"><span className="iconbtn"><Icon name="back" /></span><h1 className="topbar-title">Game #12<span className="topbar-clock"> · 1:23</span></h1><div className="topbar-right" /></header>
+            <div className="vs-strip chat-strip">
+              <div className="soundboard">{SOUNDBOARD.map((e) => <span key={e} className="sb-key">{e}</span>)}</div>
+              <PartnerMini player={partner} view={view} />
+            </div>
+            <Board guesses={SAMPLE} current="BL" revealRow={null} shake={false} bounceRow={null} active />
+            <Keyboard states={SAMPLE_KEYS} onKey={() => {}} />
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export function SettingsScreen() {
   const { slot, chooseSlot, players, toast, realtime } = useStore();
   const [theme, setThemeState] = useState<ThemeChoice>(getTheme());
@@ -261,6 +307,8 @@ export function SettingsScreen() {
           ))}
         </div>
       </section>
+
+      <KeyboardSize />
 
       <section className="card">
         <h3>This phone</h3>

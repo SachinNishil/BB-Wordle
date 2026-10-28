@@ -46,3 +46,10 @@ export function feedTaunts(gameId: string | undefined, taunts: Taunt[] | undefin
   save(KEY, shown);
   if (fresh.length) for (const l of listeners) l(gameId, fresh.slice(-4));
 }
+
+let noticeId = -1;
+/** v1.20: your partner changed their status: pops up like a message (game id ''). */
+export function emitNotice(body: string) {
+  const t: Taunt = { id: noticeId--, from: 0 as unknown as Slot, body, at: new Date().toISOString(), seen: false, kind: 'notice' };
+  for (const l of listeners) l('', [t]);
+}

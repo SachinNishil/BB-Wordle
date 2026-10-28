@@ -108,11 +108,7 @@ export function GameScreen({ id }: { id?: string }) {
   const phase = phaseOf(game, loaded);
   const endless = game?.mode === 'endless';
 
-  // v1.19: no waiting room. Waiting for the other one happens on Home; the app
-  // jumps here when the countdown starts.
-  useEffect(() => {
-    if (phase === 'waiting') go('/', true);
-  }, [phase]);
+  // v1.20: the waiting room is back (it lives right here, for all three modes).
 
   // v1.19: leaving a round (app minimised, or back to Home) stops my clock;
   // coming back carries on. Nothing is counted while I'm away.
@@ -234,7 +230,7 @@ export function GameScreen({ id }: { id?: string }) {
   useEffect(() => {
     if (!game || !slot || joining.current) return;
     if (game.status === 'completed' || game.me.joined_at) return;
-    if (game.mode === 'challenge') return; // challenge: joining is the Ready button
+    // v1.20: opening the game screen means "I'm in the room" in every mode, challenge included.
     joining.current = true;
     api
       .joinGame(slot, game.id)
@@ -355,7 +351,10 @@ export function GameScreen({ id }: { id?: string }) {
     }
   }, [game, slot, typed, apply, ping, toast, doShake, reportError, reload]);
 
-  const picking = phase === 'setting' && !!game && (!game.i_have_set || changing);
+  // v1.20 challenge: the words are picked in the waiting room, once you're both in it.
+  const bothIn = !!game && !!game.me.joined_at && !!game.partner.joined_at && game.partner.here;
+  const inRoom = !!game && (phase === 'waiting' || phase === 'readycheck' || (phase === 'setting' && !bothIn));
+  const picking = phase === 'setting' && !!game && bothIn && (!game.i_have_set || changing);
 
   const submitPick = useCallback(async () => {
     if (!game || !slot) return;
@@ -380,20 +379,6 @@ export function GameScreen({ id }: { id?: string }) {
       setSubmitting(false);
     }
   }, [game, slot, pick, apply, ping, toast, doShake, reportError, reload, partner]);
-
-  async function ready() {
-    if (!game || !slot) return;
-    setBusy(true);
-    try {
-      const s = await api.joinGame(slot, game.id);
-      apply(s.game);
-      ping('game', 'joined');
-    } catch (e) {
-      reportError(e);
-    } finally {
-      setBusy(false);
-    }
-  }
 
   const onKey = useCallback(
     (k: string) => {
@@ -519,6 +504,29 @@ export function GameScreen({ id }: { id?: string }) {
     );
   }
 
+  if (inRoom && game) {
+    const partnerIn = !!game.partner.joined_at && game.partner.here;
+    const emoji = game.mode === 'challenge' ? '⚔️' : game.mode === 'endless' ? '♾️' : '🟩';
+    return (
+      <div className="screen waiting room">
+        <header className="topbar">
+          <button className="iconbtn" onClick={() => go('/', true)} aria-label="Back"><Icon name="back" /></button>
+          <h1 className="topbar-title">{game.mode === 'challenge' ? 'Challenge ⚔️' : game.mode === 'endless' ? 'Endless ♾️' : 'Classic'}</h1>
+          <div className="topbar-right" />
+        </header>
+        <div className="waiting-body">
+          <div className="waiting-couple">
+            <span className="room-seat in"><Avatar player={me} size={84} ring /><span className="room-tick">✓</span></span>
+            <span className="beat" aria-hidden="true">{emoji}</span>
+            <span className={`room-seat${partnerIn ? ' in' : ''}`}><Avatar player={partner} size={84} ring={partnerIn} />{partnerIn && <span className="room-tick">✓</span>}</span>
+          </div>
+          <h2 className="waiting-title" role="status">{partnerIn ? (game.mode === 'challenge' ? 'Both in!' : 'Starting…') : <>Waiting for {partner.name}<span className="room-dots" aria-hidden="true"><i /><i /><i /></span></>}</h2>
+          <button className="btn text" onClick={cancel} disabled={busy}>Cancel</button>
+        </div>
+      </div>
+    );
+  }
+
   if (phase === 'setting' && game) {
     return (
       <div className="screen game pick-screen">
@@ -571,34 +579,6 @@ export function GameScreen({ id }: { id?: string }) {
     );
   }
 
-  if (phase === 'readycheck' && game) {
-    return (
-      <div className="screen waiting">
-        <header className="topbar">
-          <button className="iconbtn" onClick={() => back('/')} aria-label="Back"><Icon name="back" /></button>
-          <h1 className="topbar-title">Challenge ⚔️</h1>
-          <div className="topbar-right" />
-        </header>
-        <div className="waiting-body">
-          <div className="waiting-couple">
-            <Avatar player={me} size={76} ring />
-            <span className="beat" aria-hidden="true">⚔️</span>
-            <Avatar player={partner} size={76} ring />
-          </div>
-          <p className="eyebrow">Both words are in</p>
-          <h2 className="waiting-title">Ready?</h2>
-          <p className="muted">You gave {partner.name} <b>{game.my_challenge_word}</b>. {partner.name} picked yours. The countdown starts when you're both ready.</p>
-          <div className="stack">
-            <button className="btn primary big" onClick={ready} disabled={busy}>I'M READY</button>
-            <button className="btn text" onClick={cancel} disabled={busy}>Call off this challenge</button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // v1.19: waiting happens on Home (see the effect above); just a beat here while it goes back.
-  if (phase === 'waiting' && game) return <div className="screen center"><span className="loader" aria-label="Back to Home" /></div>;
 
 
   if (!game) return null;

@@ -9,6 +9,18 @@ export interface Release {
 
 export const VERSIONS: Release[] = [
   {
+    version: '1.20.0',
+    date: '2026-10-28',
+    changes: [
+      'New Home: a big Classic tile, Challenge and Endless side by side, Solo tucked below. No captions.',
+      'The waiting room is back, for all three modes: starting a game takes you into it, and being in it means you\'re ready. On Home, the waiting game\'s tile shows the photo of whoever is in the room, so the other one knows which to tap. The 3, 2, 1 starts once you\'re both in.',
+      'Challenge: you pick each other\'s words right there in the waiting room once you\'re both in, and the round starts as soon as both words are in.',
+      'Typing a message (spectating, watching solo or after a game): the chat pops up right on top of the phone keyboard, with the whole conversation in view, and the keyboard stays up after you send.',
+      'Your partner\'s messages and status updates pop up wherever you are, Home included, even after you\'ve left the game. Tap a message to reply right there.',
+      'Settings › Keyboard size: make the Wordle keyboard smaller or bigger, with a preview of how the board adjusts.',
+    ],
+  },
+  {
     version: '1.19.0',
     date: '2026-10-18',
     changes: [

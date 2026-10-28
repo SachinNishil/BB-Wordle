@@ -82,7 +82,7 @@ export interface Taunt {
   /** Has the partner's phone shown it? (v1.6.1) */
   seen?: boolean;
   /** v1.9: 'boom' = soundboard emoji (not part of the chat log). */
-  kind?: 'chat' | 'boom';
+  kind?: 'chat' | 'boom' | 'notice';
 }
 
 /** v1.19: 'endless' = no limit on guesses, the first to find the word wins. */

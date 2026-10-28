@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { api, ApiError, friendlyError } from './lib/api';
 import { deviceId, getSlot, setSlot as saveSlot, stripLegacyInvite } from './lib/identity';
 import { RoomChannel, type ChangeKind, type PresenceInfo, type Screen, type TypingInfo } from './lib/realtime';
-import { feedTaunts } from './lib/tauntFeed';
+import { emitNotice, feedTaunts } from './lib/tauntFeed';
 import { serverNow } from './lib/clock';
 import type { GameView, HistoryGame, Player, Slot, SoloState, SoloView, Taunt, WordSettings } from './lib/types';
 import { load, save } from './lib/storage';
@@ -88,6 +88,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [slot, setSlotState] = useState<Slot | null>(() => getSlot());
   const [players, setPlayersState] = useState<Record<Slot, Player>>(DEFAULT_PLAYERS);
   const [history, setHistory] = useState<HistoryGame[] | null>(null);
+  const historyRef = useRef<HistoryGame[] | null>(null);
+  historyRef.current = history;
   const [soloHistory, setSoloHistory] = useState<SoloView[] | null>(null);
   const [active, setActiveState] = useState<GameView | null>(null);
   const [activeLoaded, setActiveLoaded] = useState(false);
@@ -139,7 +141,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (before && other) {
         if (now.status && now.status !== before.status && other.status_text) {
           navigator.vibrate?.(20);
-          if (screenRef.current !== 'home') toast(`💬 ${other.name}: ${other.status_text}`, 'info', { label: 'See', run: () => go('/') });
+          // v1.20: a pop-up wherever you are (Home too).
+          emitNotice(other.status_text);
         }
         if (now.words && now.words !== before.words && r.word_settings?.changed_by === other.slot && screenRef.current !== 'settings') {
           toast(`${other.name} changed the Classic words`, 'info', { label: 'See', run: () => go('/settings') });
@@ -172,6 +175,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setActive(s.game);
       if (s.game) feedTaunts(s.game.id, [...(s.game.taunts ?? []), ...(s.game.booms ?? [])], slot);
       setOnline(true);
+      // v1.20: the chat after a game goes on after you've left it. For a quarter of an hour
+      // after the last game, its messages still pop up wherever you are.
+      const last = historyRef.current?.[0];
+      if (!s.game && last && serverNow() - Date.parse(last.completed_at) < 15 * 60000) {
+        const g = await api.getGameState(slot, last.id);
+        if (g.game) feedTaunts(g.game.id, g.game.taunts ?? [], slot);
+      }
     } catch (e) {
       if (e instanceof ApiError && e.network) setOnline(false);
     }
@@ -250,7 +260,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               navigator.vibrate?.([30, 60, 30]);
               const from = namesRef.current[p.slot].name;
               toast(p.what === 'challenged' ? `⚔️ ${from} challenged you!` : `${from} started a game!`, 'info', {
-                label: p.what === 'challenged' ? 'Pick a word' : 'Join',
+                label: 'Join',
                 run: () => go('/game'),
               });
             }
@@ -363,8 +373,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // v1.18 lobby: a waiting game only counts down while you're both in the app. While
   // I've joined and the app is open on Home or the game, check in every 4 s; say so
   // when I leave. Once the countdown is set, Home jumps straight to the game.
-  const waitingId = active && active.status === 'waiting' && active.me.joined_at ? active.id : null;
-  const inLobbyScreen = screen === 'home' || screen === 'game';
+  // v1.20: the waiting room is back: being in it (the game screen) is what "ready" means.
+  const waitingId = active && (active.status === 'waiting' || active.status === 'setting') && !active.starts_at && active.me.joined_at ? active.id : null;
+  const inLobbyScreen = screen === 'game';
   useEffect(() => {
     if (!slot || !waitingId || !inLobbyScreen) return;
     let alive = true;

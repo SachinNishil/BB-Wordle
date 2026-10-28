@@ -1,3 +1,4 @@
+import { PlayModes, SoloRow } from '../components/PlayModes';
 import { useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { Avatar } from '../components/Avatar';
 import { Icon } from '../components/Icon';
@@ -7,7 +8,7 @@ import { GameWords } from '../components/Tiles';
 import { api } from '../lib/api';
 import { APP_VERSION } from '../lib/versions';
 import { fmtDate, fmtDuration, serverNow } from '../lib/clock';
-import type { GameMode, GameView, HistoryGame, Player, Slot, SoloView, WordSettings } from '../lib/types';
+import type { GameMode, GameView, HistoryGame, Player, Slot, SoloView } from '../lib/types';
 import { go } from '../router';
 import { useStore } from '../store';
 
@@ -35,15 +36,9 @@ export function historyLine(g: HistoryGame, players: Record<Slot, Player>) {
 }
 
 /** "everyday word", "everyday word, plurals included", "word from the whole dictionary"... */
-function classicPool(w: WordSettings | null) {
-  if (!w) return 'everyday word';
-  if (w.ed && w.plural && w.uncommon) return 'word from the whole dictionary';
-  const extra = [w.plural && 'plurals', w.ed && '-ed words', w.uncommon && 'tricky ones'].filter(Boolean) as string[];
-  return extra.length ? `everyday word (${extra.join(' and ')} too)` : 'everyday word';
-}
 
 function GameCard() {
-  const { slot, players, active, activeLoaded, setActive, ping, reportError, wordSettings } = useStore();
+  const { slot, players, active, activeLoaded, setActive, ping, reportError } = useStore();
   const [starting, setStarting] = useState<GameMode | null>(null);
   if (!slot) return null;
   const me = players[slot];
@@ -56,8 +51,8 @@ function GameCard() {
       const s = await api.startGame(slot, mode);
       setActive(s.game);
       ping('game', s.already_active ? 'joined' : mode === 'challenge' ? 'challenged' : 'started');
-      // v1.19: classic and endless wait right here on Home; a challenge needs its word picked first.
-      if (s.game?.status === 'setting') go('/game');
+      // v1.20: straight into the waiting room.
+      go('/game');
     } catch (e) {
       reportError(e);
     } finally {
@@ -73,32 +68,15 @@ function GameCard() {
     );
   }
 
-  if (!active) {
-    return (
-      <section className="card game-card idle">
-        <p className="eyebrow">Today's game</p>
-        <h2 className="game-card-title">Ready for a battle?</h2>
-        <div className="mode-choice">
-          <button className="btn primary big" onClick={() => start('classic')} disabled={!!starting}>
-            {starting === 'classic' ? 'Picking a word…' : 'START GAME'}
-          </button>
-          <p className="mode-note">Classic: a random {classicPool(wordSettings)}, the same for both of you.</p>
-        </div>
-        <div className="mode-or" aria-hidden="true"><span>or</span></div>
-        <div className="mode-choice">
-          <button className="btn ghost big challenge-btn" onClick={() => start('challenge')} disabled={!!starting}>
-            {starting === 'challenge' ? 'Starting…' : <>⚔️ CHALLENGE {partner.name.toUpperCase()}</>}
-          </button>
-          <p className="mode-note">You pick a word for {partner.name}, {partner.name} picks one for you.</p>
-        </div>
-        <div className="mode-choice">
-          <button className="btn ghost big endless-btn" onClick={() => start('endless')} disabled={!!starting}>
-            {starting === 'endless' ? 'Picking a word…' : <>♾️ ENDLESS RACE</>}
-          </button>
-          <p className="mode-note">No limit on guesses. Whoever finds the word first wins.</p>
-        </div>
-      </section>
-    );
+  // v1.20: until a round starts, Home keeps the game picker; the waiting game's tile shows
+  // who's in the room, and tapping it goes in.
+  const preStart = !!active && (active.status === 'setting' || (active.status === 'waiting' && !active.starts_at));
+  if (!active || preStart) {
+    const pending = active && preStart ? {
+      mode: (active.mode ?? 'classic') as GameMode,
+      inRoom: [active.me.joined_at ? me : null, active.partner.joined_at ? partner : null].filter((p): p is Player => !!p),
+    } : null;
+    return <PlayModes partner={partner} starting={starting} start={start} pending={pending} enter={() => go('/game')} />;
   }
 
   return <ActiveCard game={active} me={me} partner={partner} />;
@@ -107,77 +85,15 @@ function GameCard() {
 const MODE_LABEL: Record<GameMode, string> = { classic: 'Classic', challenge: 'Challenge ⚔️', endless: 'Endless ♾️' };
 
 function ActiveCard({ game, me, partner }: { game: GameView; me: Player; partner: Player }) {
-  const { slot, setActive, ping, reportError } = useStore();
-  const [busy, setBusy] = useState(false);
   const mineDone = game.me.status === 'solved' || game.me.status === 'failed';
   const challenge = game.mode === 'challenge';
   const endless = game.mode === 'endless';
-  const waiting = game.status === 'waiting';
-
-  // v1.19: joining, getting ready and cancelling all happen right here on Home.
-  async function join() {
-    if (!slot) return;
-    setBusy(true);
-    try {
-      const r = await api.joinGame(slot, game.id);
-      setActive(r.game);
-      ping('game', 'joined');
-    } catch (e) {
-      reportError(e);
-    } finally {
-      setBusy(false);
-    }
-  }
-  async function cancel() {
-    if (!slot) return;
-    setBusy(true);
-    try {
-      await api.cancelGame(slot, game.id);
-      setActive(null);
-      ping('game', 'cancelled');
-    } catch (e) {
-      reportError(e);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  // The lobby: one of you is waiting for the other.
-  if (waiting) {
-    const iAmIn = !!game.me.joined_at;
-    const theyAreIn = !!game.partner.joined_at && !!game.partner.here;
-    return (
-      <section className={`card game-card live lobby${challenge ? ' challenge' : ''}`}>
-        <p className="eyebrow live-eyebrow"><i className="dot" /> {MODE_LABEL[game.mode ?? 'classic']}</p>
-        {iAmIn ? (
-          <>
-            <h2 className="game-card-title">Waiting for {partner.name}</h2>
-            <div className="lobby-status" role="status">
-              <span className="lobby-chip on">✓ You're here</span>
-              {theyAreIn && <span className="lobby-chip on">✓ {partner.name} is here</span>}
-            </div>
-            <button className="btn text small" onClick={cancel} disabled={busy}>Cancel</button>
-          </>
-        ) : (
-          <>
-            <h2 className="game-card-title">{challenge ? 'Both words are in!' : `${partner.name} started a game!`}</h2>
-            <button className="btn primary big" onClick={join} disabled={busy}>{challenge ? "I'M READY" : 'JOIN GAME'}</button>
-          </>
-        )}
-      </section>
-    );
-  }
 
   let title = 'Game live';
   let cta = 'CONTINUE';
-  if (challenge && game.status === 'setting') {
-    if (!game.i_have_set) {
-      title = game.created_by === me.slot ? `Pick a word for ${partner.name}` : `${partner.name} challenged you!`;
-      cta = 'PICK A WORD';
-    } else {
-      title = `Waiting for ${partner.name} to pick your word`;
-      cta = 'VIEW';
-    }
+  if (game.status === 'ready' && game.starts_at && game.me.status !== 'playing') {
+    title = 'Starting…';
+    cta = 'GO';
   } else if (mineDone) {
     title = game.me.status === 'solved' ? `You solved it in ${game.me.guess_count}` : 'Your round is over';
     cta = 'VIEW';
@@ -393,11 +309,7 @@ export function Home() {
 
       <GameCard />
       {psActive && ps && <PartnerSolo game={ps} partner={partner} />}
-      <button className="solo-link" onClick={() => go('/solo')}>
-        {solo.mine
-          ? <span>Carry on with your <b>solo</b> game · <SoloElapsed solo={solo.mine} />{solo.mine.paused ? ' (paused)' : ''} ›</span>
-          : <span>Or play <b>solo</b>, on your own (it has its own stats) ›</span>}
-      </button>
+      <SoloRow mine={solo.mine} />
 
       <InstallHint />
 
