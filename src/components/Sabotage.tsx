@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api';
 import { serverNow } from '../lib/clock';
-import { FIRST_LETTERS, isDefence, POWERS, powerById } from '../lib/powers';
+import { BUDGET, costOf, FIRST_LETTERS, isDefence, POWERS, powerById } from '../lib/powers';
 import type { GameView, Player, PowerId, SabEvent, Slot } from '../lib/types';
 import { useStore } from '../store';
 
@@ -28,7 +28,9 @@ export function PowerPicker({ game, slot, partner, onGame }: { game: GameView; s
       setBusy(false);
     }
   }
-  const toggle = (id: PowerId) => setSel((s) => (s.includes(id) ? s.filter((x) => x !== id) : s.length < 3 ? [...s, id] : s));
+  const spent = costOf(sel);
+  const fits = (id: PowerId) => sel.length < 3 && spent + powerById(id).cost <= BUDGET;
+  const toggle = (id: PowerId) => setSel((s) => (s.includes(id) ? s.filter((x) => x !== id) : fits(id) ? [...s, id] : s));
   const partnerLine = <p className={`pick-status${game.sab?.partner_ready ? ' done' : ''}`}>{game.sab?.partner_ready ? `✅ ${partner.name} has picked` : `${partner.name} is picking…`}</p>;
 
   if (mine && !picking) {
@@ -36,6 +38,7 @@ export function PowerPicker({ game, slot, partner, onGame }: { game: GameView; s
       <div className="power-pick done">
         <p className="eyebrow">Your powers</p>
         <div className="power-hand">{mine.map((id) => <PowerCard key={id} id={id} />)}</div>
+        <p className="muted small">🪙 {costOf(mine)} of {BUDGET} coins</p>
         <button className="btn text small" onClick={() => { setSel(mine); setPicking(true); }}>Change</button>
         {partnerLine}
       </div>
@@ -56,13 +59,14 @@ export function PowerPicker({ game, slot, partner, onGame }: { game: GameView; s
   return (
     <div className="power-pick picking">
       <div className="power-pick-head">
-        <p className="eyebrow">Pick 3 · {sel.length}/3</p>
+        <p className="eyebrow">Pick 3 · {sel.length}/3 · <span className={`coins${spent === BUDGET ? ' full' : ''}`}>🪙 {BUDGET - spent} left</span></p>
         <button className="btn text small" onClick={() => { setPicking(false); setSel([]); }}>Back</button>
       </div>
       <div className="power-grid" role="group" aria-label="Powers">
         {POWERS.map((p) => (
           <button key={p.id} className={`power-option${sel.includes(p.id) ? ' on' : ''}${p.group === 'Defence' ? ' defence' : ''}`}
-            aria-pressed={sel.includes(p.id)} onClick={() => toggle(p.id)} disabled={!sel.includes(p.id) && sel.length >= 3}>
+            aria-pressed={sel.includes(p.id)} onClick={() => toggle(p.id)} disabled={!sel.includes(p.id) && !fits(p.id)}>
+            <span className="power-cost" aria-label={`${p.cost} coins`}>{'🪙'.repeat(p.cost)}</span>
             <span className="power-emoji">{p.emoji}</span>
             <span className="power-name">{p.name}</span>
             <span className="power-what">{p.what}</span>
@@ -82,6 +86,7 @@ function PowerCard({ id, used }: { id: PowerId; used?: boolean }) {
     <span className={`power-card${used ? ' used' : ''}`} title={p.what}>
       <span className="power-emoji">{p.emoji}</span>
       <span className="power-name">{p.name}</span>
+      <span className="power-cost">{'🪙'.repeat(p.cost)}</span>
     </span>
   );
 }
@@ -110,7 +115,8 @@ export function PowerBar({ game, slot, partner, onGame }: { game: GameView; slot
   const partnerHit = sab.events.some((e) => e.to !== slot && e.from !== e.to && e.active);
   const partnerDone = game.partner.status !== 'playing';
   const armed = sab.events.find((e) => e.from === slot && e.to === slot && e.active);
-  const playing = game.me.status === 'playing';
+  // v1.22: still yours to use while you watch, until their round is over too.
+  const playing = game.status !== 'completed' && ['playing', 'solved', 'failed'].includes(game.me.status);
 
   async function fire(id: PowerId, letter: string | null = null) {
     setBusy(true);

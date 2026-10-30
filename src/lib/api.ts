@@ -49,6 +49,7 @@ const FRIENDLY: Record<string, string> = {
   not_playing: 'Powers only work while you are playing',
   already_armed: 'You already have a defence armed',
   pick_three: 'Pick three different powers',
+  over_budget: 'That hand costs more than 8 coins',
   powers_locked: 'Powers are locked once the countdown starts',
   bad_letter: 'Pick another letter',
   telegram_not_set_up: 'Telegram is not set up yet (see the README).',

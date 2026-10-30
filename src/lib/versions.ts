@@ -9,6 +9,15 @@ export interface Release {
 
 export const VERSIONS: Release[] = [
   {
+    version: '1.22.0',
+    date: '2026-10-30',
+    changes: [
+      'Sabotage: powers now cost coins and you get 🪙 8 for your three. Colour blind and Bounce back cost 5, Steal a row and Liar tile 4, Shield, Banned letter, Speed trap, Delayed reveal and Forced first 3, Fog, Mirror, Shuffle, Keyboard amnesia, Lights out and Freeze 2, the rest 1. Three at random stays within 8 too.',
+      'Sabotage: finished first? Any powers you haven\'t used still work while you watch.',
+      'Secret chat: mid-round you still can\'t start a chat, but when your partner (watching) sends you a message, tap the pop-up at the top and reply right there.',
+    ],
+  },
+  {
     version: '1.21.0',
     date: '2026-10-28',
     changes: [

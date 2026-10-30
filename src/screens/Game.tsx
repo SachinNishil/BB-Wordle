@@ -682,6 +682,10 @@ export function GameScreen({ id }: { id?: string }) {
         ) : (
           <Board key="mine" guesses={game.me.guesses} current="" revealRow={null} shake={false} bounceRow={null} active={false} endless={endless} />
         )}
+        {/* v1.22: powers you haven't used still work while you watch. */}
+        {sabotage && game.sab?.powers && game.sab.powers.some((p) => !game.sab!.used.includes(p)) && game.partner.status === 'playing' && (
+          <div className="spectate-powers"><PowerBar game={game} slot={slot} partner={partner} onGame={apply} /></div>
+        )}
         <TrashTalk game={game} slot={slot} players={players} onGame={apply} variant="dock" />
         </>
       </div>
