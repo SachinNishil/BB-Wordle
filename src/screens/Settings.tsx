@@ -6,12 +6,13 @@ import { Keyboard } from '../components/Keyboard';
 import { PartnerMini } from '../components/Live';
 import { SOUNDBOARD } from '../components/TrashTalk';
 import { getKbScale, KB_MAX, KB_MIN, setKbScale } from '../lib/kbSize';
+import { POWERS } from '../lib/powers';
 import { TopBar } from '../components/TopBar';
 import { api, type TelegramStatus } from '../lib/api';
 import { APP_VERSION } from '../lib/config';
 import { photoToDataUrl } from '../lib/photo';
 import { getTheme, setTheme, type ThemeChoice } from '../lib/theme';
-import type { PartnerView, Slot, WordSettings, WordSettingsInfo } from '../lib/types';
+import type { PartnerView, PowerId, SabSettings, Slot, WordSettings, WordSettingsInfo } from '../lib/types';
 import { go } from '../router';
 import { useStore } from '../store';
 
@@ -231,6 +232,86 @@ function TelegramInvites() {
   );
 }
 
+/** v1.23: Settings › Sabotage mode: coins to spend, what each power costs, which are allowed. Shared by the room. */
+function SabotageSettings() {
+  const { slot, players, ping, reportError } = useStore();
+  const [set, setSet] = useState<SabSettings | null>(null);
+  const [open, setOpen] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const partner = slot ? players[(3 - slot) as Slot] : null;
+  useEffect(() => { api.getSabotageSettings().then(setSet).catch(() => setSet(null)); }, []);
+  function change(next: SabSettings) {
+    setSet(next);
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(async () => {
+      if (!slot) return;
+      try {
+        const allOn = next.allowed.length === POWERS.length;
+        const r = await api.setSabotageSettings(slot, next.budget, next.costs, allOn ? null : next.allowed);
+        setSet(r);
+        ping('room', 'sabotage-settings');
+      } catch (e) {
+        reportError(e);
+        api.getSabotageSettings().then(setSet).catch(() => {});
+      }
+    }, 600);
+  }
+  if (!set) return null;
+  const budget = (d: number) => change({ ...set, budget: Math.min(30, Math.max(1, set.budget + d)) });
+  const cost = (id: PowerId, d: number) => change({ ...set, costs: { ...set.costs, [id]: Math.min(10, Math.max(0, set.costs[id] + d)) } });
+  const allow = (id: PowerId) => {
+    const on = set.allowed.includes(id);
+    if (on && set.allowed.length === 1) return;
+    change({ ...set, allowed: on ? set.allowed.filter((x) => x !== id) : POWERS.map((p) => p.id).filter((x) => x === id || set.allowed.includes(x)) });
+  };
+  const isDefault = set.budget === 8 && set.allowed.length === POWERS.length && POWERS.every((p) => set.costs[p.id] === set.defaults[p.id]);
+  const by = set.changed_by ? players[set.changed_by]?.name : null;
+  return (
+    <section className="card sab-settings">
+      <button className="sab-settings-head" onClick={() => setOpen((x) => !x)} aria-expanded={open}>
+        <h3>Sabotage mode 😈</h3>
+        <span className="muted small">🪙 {set.budget} · {set.allowed.length} powers {open ? '▴' : '▾'}</span>
+      </button>
+      {open && (
+        <>
+          <p className="muted small">Shared with {partner?.name ?? 'your partner'}: it applies to both of you from the next pick. Each of you picks up to three powers that fit the coins.</p>
+          <div className="sab-budget">
+            <span>Coins each</span>
+            <div className="stepper">
+              <button className="btn soft small" onClick={() => budget(-1)} aria-label="Fewer coins">−</button>
+              <b aria-live="polite">🪙 {set.budget}</b>
+              <button className="btn soft small" onClick={() => budget(1)} aria-label="More coins">+</button>
+            </div>
+          </div>
+          <ul className="sab-power-list">
+            {POWERS.map((p) => {
+              const on = set.allowed.includes(p.id);
+              return (
+                <li key={p.id} className={on ? '' : 'off'}>
+                  <label className="sab-power-toggle">
+                    <input type="checkbox" checked={on} onChange={() => allow(p.id)} aria-label={`Allow ${p.name}`} />
+                    <span className="sab-power-emoji" aria-hidden="true">{p.emoji}</span>
+                    <span className="sab-power-name">{p.name}</span>
+                  </label>
+                  <div className="stepper small">
+                    <button className="btn soft small" onClick={() => cost(p.id, -1)} disabled={!on || set.costs[p.id] <= 0} aria-label={`${p.name} cheaper`}>−</button>
+                    <b>{set.costs[p.id]}</b>
+                    <button className="btn soft small" onClick={() => cost(p.id, 1)} disabled={!on || set.costs[p.id] >= 10} aria-label={`${p.name} dearer`}>+</button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="sab-settings-foot">
+            {by && set.changed_at && !isDefault && <span className="muted small">Last changed by {by}</span>}
+            <button className="btn text small" disabled={isDefault} onClick={() => change({ ...set, budget: 8, allowed: POWERS.map((p) => p.id), costs: { ...set.defaults } })}>Back to the defaults</button>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
 /** v1.20: how big the Wordle keyboard is, with a live preview of the game screen. */
 const SAMPLE = [{ word: 'CRANE', pattern: 'XYXXG' }, { word: 'SOUTH', pattern: 'XXXYX' }];
 const SAMPLE_KEYS: Record<string, 'correct' | 'present' | 'absent'> = { C: 'absent', R: 'present', A: 'absent', N: 'absent', E: 'correct', S: 'absent', O: 'absent', U: 'absent', T: 'present', H: 'absent' };
@@ -295,6 +376,8 @@ export function SettingsScreen() {
       <ClassicWords />
 
       <TelegramInvites />
+
+      <SabotageSettings />
 
       <section className="card">
         <h3>Appearance</h3>

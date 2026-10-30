@@ -141,7 +141,18 @@ export interface SabEvent {
   active: boolean;
 }
 
+export interface SabSettings {
+  budget: number;
+  allowed: PowerId[];
+  max_powers: number;
+  costs: Record<PowerId, number>;
+  defaults: Record<PowerId, number>;
+  changed_at: string | null;
+  changed_by: Slot | null;
+}
+
 export interface SabView {
+  settings?: SabSettings;
   powers: PowerId[] | null;
   used: PowerId[];
   partner_ready: boolean;

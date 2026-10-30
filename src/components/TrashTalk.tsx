@@ -449,10 +449,18 @@ function ReplySheet({ id, inputRef, onClose }: { id: string; inputRef: React.Ref
     const t = setInterval(() => { if (document.visibilityState === 'visible') void load(); }, 2500);
     return () => { alive = false; clearInterval(t); };
   }, [slot, id]);
+  // v1.23: sent before the chat has loaded? Hold it and send it the moment it's in.
+  const pending = useRef<string[]>([]);
+  useEffect(() => {
+    if (!talk || !pending.current.length) return;
+    const queue = pending.current;
+    pending.current = [];
+    void (async () => { for (const b of queue) await send(talk.t, b); })();
+  }, [talk]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!slot) return null;
   return (
     <TypeSheet taunts={talk?.t.taunts ?? []} slot={slot} players={players} sending={sending} loading={!talk} text={text} setText={setText}
-      send={(b) => send(talk?.t ?? null, b)} inputRef={inputRef} onClose={onClose} />
+      send={(b) => (talk ? send(talk.t, b) : (pending.current.push(b), Promise.resolve(true)))} inputRef={inputRef} onClose={onClose} />
   );
 }
 

@@ -1131,9 +1131,10 @@ a.btn { text-decoration: none; }
 .sab-mirror .board { transform: scaleX(-1); }
 .sab-quake .board-wrap, .sab-quake .keyboard { animation: quake 0.18s linear infinite; }
 @keyframes quake { 0% { translate: 0 0; } 25% { translate: -5px 3px; rotate: -1deg; } 50% { translate: 4px -3px; } 75% { translate: -3px -2px; rotate: 1deg; } 100% { translate: 0 0; } }
+html.sab-dark-on, html.sab-dark-on body, html.sab-dark-on .screen { touch-action: none; overscroll-behavior: none; }
 .sab-dark {
   position: fixed; inset: 0; z-index: 40; pointer-events: none; --x: 50vw; --y: 45vh;
-  background: radial-gradient(circle 70px at var(--x) var(--y), transparent 0, transparent 55px, rgba(0, 0, 0, 0.985) 75px);
+  background: radial-gradient(circle 95px at var(--x) var(--y), transparent 0, transparent 70px, rgba(0, 0, 0, 0.985) 95px);
 }
 .sab-freeze {
   position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; pointer-events: auto;
@@ -1149,3 +1150,20 @@ a.btn { text-decoration: none; }
 
 .spectate-powers { flex: none; margin: 8px 0 0; }
 .spectate-powers .power-btn { min-height: 52px; }
+
+/* --------------------------------------------------------------- Settings › Sabotage mode (v1.23) */
+.sab-settings-head { display: flex; justify-content: space-between; align-items: center; width: 100%; border: 0; background: none; padding: 0; color: inherit; text-align: left; }
+.sab-settings-head h3 { margin: 0; }
+.sab-budget { display: flex; justify-content: space-between; align-items: center; margin: 12px 0 6px; font-weight: 700; }
+.stepper { display: inline-flex; align-items: center; gap: 8px; }
+.stepper b { min-width: 3.2ch; text-align: center; font-variant-numeric: tabular-nums; }
+.stepper .btn { min-width: 36px; min-height: 34px; padding: 0 10px; font-size: 1.1rem; }
+.stepper.small .btn { min-width: 32px; min-height: 30px; }
+.sab-power-list { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; }
+.sab-power-list li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line); }
+.sab-power-list li.off .sab-power-name, .sab-power-list li.off .sab-power-emoji { opacity: 0.4; }
+.sab-power-toggle { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; cursor: pointer; }
+.sab-power-toggle input { width: 18px; height: 18px; accent-color: var(--green); flex: none; }
+.sab-power-emoji { font-size: 1.15rem; }
+.sab-power-name { font-weight: 700; font-size: 0.92rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sab-settings-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }

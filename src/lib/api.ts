@@ -1,6 +1,6 @@
 import { syncClock } from './clock';
 import { supabase } from './supabase';
-import type { GameMode, GameState, GuessResult, PowerId, HistoryGame, Room, Slot, SoloState, SoloStats, SoloView, WordSettingsInfo } from './types';
+import type { GameMode, GameState, GuessResult, PowerId, SabSettings, HistoryGame, Room, Slot, SoloState, SoloStats, SoloView, WordSettingsInfo } from './types';
 
 /** An error from the server, with a code from supabase/schema.sql (e.g. "not_a_word"). */
 export class ApiError extends Error {
@@ -48,7 +48,11 @@ const FRIENDLY: Record<string, string> = {
   partner_done: 'Their round is already over',
   not_playing: 'Powers only work while you are playing',
   already_armed: 'You already have a defence armed',
-  pick_three: 'Pick three different powers',
+  pick_three: 'Pick up to three different powers',
+  power_not_allowed: "That power is switched off in Settings",
+  bad_budget: 'Coins have to be between 1 and 30',
+  bad_cost: 'A power costs 0 to 10 coins',
+  bad_allowed: 'Leave at least one power switched on',
   over_budget: 'That hand costs more than 8 coins',
   powers_locked: 'Powers are locked once the countdown starts',
   bad_letter: 'Pick another letter',
@@ -111,6 +115,9 @@ export const api = {
     call<GameState>('pause_round', { ...K, p_slot: slot, p_game_id: gameId, p_paused: paused }),
   sabotageLoadout: (slot: Slot, gameId: string, powers: PowerId[] | null) =>
     call<GameState>('sabotage_loadout', { ...K, p_slot: slot, p_game_id: gameId, p_powers: powers }),
+  getSabotageSettings: () => call<SabSettings>('get_sabotage_settings', { ...K }),
+  setSabotageSettings: (slot: Slot, budget: number, costs: Partial<Record<PowerId, number>>, allowed: PowerId[] | null) =>
+    call<SabSettings>('set_sabotage_settings', { ...K, p_slot: slot, p_budget: budget, p_costs: costs, p_allowed: allowed }),
   sabotageSend: (slot: Slot, gameId: string, power: PowerId, letter: string | null = null) =>
     call<GameState & { blocked?: boolean; bounced?: boolean }>('sabotage_send', { ...K, p_slot: slot, p_game_id: gameId, p_power: power, p_letter: letter }),
   lobby: (slot: Slot, gameId: string, here = true) =>

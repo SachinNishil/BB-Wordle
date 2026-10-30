@@ -9,6 +9,15 @@ export interface Release {
 
 export const VERSIONS: Release[] = [
   {
+    version: '1.23.0',
+    date: '2026-10-30',
+    changes: [
+      'Settings › Sabotage mode: set how many coins you each get, what every power costs (0 to 10) and which powers are allowed. Shared by both of you, with a button to go back to the defaults.',
+      'Sabotage: you no longer have to take three powers. One or two is fine if that\'s how you want to spend your coins (say a 5 and a 3).',
+      'Lights out: the torch now follows your finger as you drag it around the screen, and it\'s a bit bigger.',
+    ],
+  },
+  {
     version: '1.22.0',
     date: '2026-10-30',
     changes: [

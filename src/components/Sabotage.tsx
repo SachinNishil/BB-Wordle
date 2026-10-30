@@ -28,8 +28,14 @@ export function PowerPicker({ game, slot, partner, onGame }: { game: GameView; s
       setBusy(false);
     }
   }
-  const spent = costOf(sel);
-  const fits = (id: PowerId) => sel.length < 3 && spent + powerById(id).cost <= BUDGET;
+  // v1.23: budget, costs and allowed powers come from Settings › Sabotage mode.
+  const set = game.sab?.settings;
+  const budget = set?.budget ?? BUDGET;
+  const costs = set?.costs;
+  const cost = (id: PowerId) => costs?.[id] ?? powerById(id).cost;
+  const allowed = POWERS.filter((p) => !set?.allowed || set.allowed.includes(p.id));
+  const spent = costOf(sel, costs);
+  const fits = (id: PowerId) => sel.length < 3 && spent + cost(id) <= budget;
   const toggle = (id: PowerId) => setSel((s) => (s.includes(id) ? s.filter((x) => x !== id) : fits(id) ? [...s, id] : s));
   const partnerLine = <p className={`pick-status${game.sab?.partner_ready ? ' done' : ''}`}>{game.sab?.partner_ready ? `✅ ${partner.name} has picked` : `${partner.name} is picking…`}</p>;
 
@@ -37,8 +43,8 @@ export function PowerPicker({ game, slot, partner, onGame }: { game: GameView; s
     return (
       <div className="power-pick done">
         <p className="eyebrow">Your powers</p>
-        <div className="power-hand">{mine.map((id) => <PowerCard key={id} id={id} />)}</div>
-        <p className="muted small">🪙 {costOf(mine)} of {BUDGET} coins</p>
+        <div className="power-hand">{mine.map((id) => <PowerCard key={id} id={id} cost={cost(id)} />)}</div>
+        <p className="muted small">🪙 {costOf(mine, costs)} of {budget} coins</p>
         <button className="btn text small" onClick={() => { setSel(mine); setPicking(true); }}>Change</button>
         {partnerLine}
       </div>
@@ -49,8 +55,8 @@ export function PowerPicker({ game, slot, partner, onGame }: { game: GameView; s
       <div className="power-pick">
         <p className="eyebrow">Your powers</p>
         <div className="power-choice">
-          <button className="btn primary" onClick={() => save(null)} disabled={busy}>🎲 3 at random</button>
-          <button className="btn ghost" onClick={() => setPicking(true)} disabled={busy}>Pick 3</button>
+          <button className="btn primary" onClick={() => save(null)} disabled={busy}>🎲 At random</button>
+          <button className="btn ghost" onClick={() => setPicking(true)} disabled={busy}>Pick my own</button>
         </div>
         {partnerLine}
       </div>
@@ -59,34 +65,34 @@ export function PowerPicker({ game, slot, partner, onGame }: { game: GameView; s
   return (
     <div className="power-pick picking">
       <div className="power-pick-head">
-        <p className="eyebrow">Pick 3 · {sel.length}/3 · <span className={`coins${spent === BUDGET ? ' full' : ''}`}>🪙 {BUDGET - spent} left</span></p>
+        <p className="eyebrow">Up to 3 · {sel.length}/3 · <span className={`coins${spent === budget ? ' full' : ''}`}>🪙 {budget - spent} left</span></p>
         <button className="btn text small" onClick={() => { setPicking(false); setSel([]); }}>Back</button>
       </div>
       <div className="power-grid" role="group" aria-label="Powers">
-        {POWERS.map((p) => (
+        {allowed.map((p) => (
           <button key={p.id} className={`power-option${sel.includes(p.id) ? ' on' : ''}${p.group === 'Defence' ? ' defence' : ''}`}
             aria-pressed={sel.includes(p.id)} onClick={() => toggle(p.id)} disabled={!sel.includes(p.id) && !fits(p.id)}>
-            <span className="power-cost" aria-label={`${p.cost} coins`}>{'🪙'.repeat(p.cost)}</span>
+            <span className="power-cost" aria-label={`${cost(p.id)} coins`}>{cost(p.id) ? '🪙'.repeat(cost(p.id)) : 'free'}</span>
             <span className="power-emoji">{p.emoji}</span>
             <span className="power-name">{p.name}</span>
             <span className="power-what">{p.what}</span>
           </button>
         ))}
       </div>
-      <button className="btn primary big power-go" onClick={() => save(sel)} disabled={busy || sel.length !== 3}>
-        {sel.length === 3 ? 'THESE THREE' : `PICK ${3 - sel.length} MORE`}
+      <button className="btn primary big power-go" onClick={() => save(sel)} disabled={busy || sel.length === 0}>
+        {sel.length === 0 ? 'PICK UP TO 3' : sel.length === 1 ? 'USE THIS ONE' : sel.length === 2 ? 'USE THESE TWO' : 'USE THESE THREE'}
       </button>
     </div>
   );
 }
 
-function PowerCard({ id, used }: { id: PowerId; used?: boolean }) {
+function PowerCard({ id, used, cost }: { id: PowerId; used?: boolean; cost: number }) {
   const p = powerById(id);
   return (
     <span className={`power-card${used ? ' used' : ''}`} title={p.what}>
       <span className="power-emoji">{p.emoji}</span>
       <span className="power-name">{p.name}</span>
-      <span className="power-cost">{'🪙'.repeat(p.cost)}</span>
+      <span className="power-cost">{cost ? '🪙'.repeat(cost) : 'free'}</span>
     </span>
   );
 }
@@ -233,13 +239,29 @@ export function SabBanner({ incoming, partner }: { incoming: ReturnType<typeof u
 export function DarkOverlay() {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const move = (e: PointerEvent) => {
-      ref.current?.style.setProperty('--x', `${e.clientX}px`);
-      ref.current?.style.setProperty('--y', `${e.clientY}px`);
+    const at = (x: number, y: number) => {
+      ref.current?.style.setProperty('--x', `${x}px`);
+      ref.current?.style.setProperty('--y', `${y}px`);
     };
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerdown', move);
-    return () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerdown', move); };
+    // v1.23: follow the finger while it drags (touch events keep coming on phones, where
+    // pointer events stop as soon as the browser thinks you're scrolling).
+    const touch = (e: TouchEvent) => { const t = e.touches[0]; if (t) at(t.clientX, t.clientY); };
+    const pointer = (e: PointerEvent) => at(e.clientX, e.clientY);
+    const board = document.querySelector('.board')?.getBoundingClientRect();
+    if (board) at(board.left + board.width / 2, board.top + board.height / 2);
+    document.documentElement.classList.add('sab-dark-on');
+    const opt = { passive: true, capture: true } as const;
+    window.addEventListener('touchstart', touch, opt);
+    window.addEventListener('touchmove', touch, opt);
+    window.addEventListener('pointermove', pointer, opt);
+    window.addEventListener('pointerdown', pointer, opt);
+    return () => {
+      document.documentElement.classList.remove('sab-dark-on');
+      window.removeEventListener('touchstart', touch, opt);
+      window.removeEventListener('touchmove', touch, opt);
+      window.removeEventListener('pointermove', pointer, opt);
+      window.removeEventListener('pointerdown', pointer, opt);
+    };
   }, []);
   return <div className="sab-dark" ref={ref} aria-hidden="true" />;
 }

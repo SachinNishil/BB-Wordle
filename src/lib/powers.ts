@@ -10,7 +10,7 @@ export interface Power {
   /** What it does to them, short. */
   what: string;
   group: 'Screen' | 'Keyboard' | 'Colours' | 'Time and moves' | 'Defence';
-  /** v1.22: coins it costs (you have BUDGET for your three). Same numbers as _sab_cost on the server. */
+  /** v1.22: the default coins it costs (Settings can change it; same numbers as _sab_default_cost). */
   cost: number;
 }
 
@@ -37,7 +37,8 @@ export const POWERS: Power[] = [
   { id: 'bounce', emoji: '🪃', name: 'Bounce back', what: 'The next sabotage aimed at you hits them instead', group: 'Defence', cost: 5 },
 ];
 
-export const costOf = (ids: readonly string[]) => ids.reduce((n, id) => n + (POWERS.find((p) => p.id === id)?.cost ?? 0), 0);
+export const costOf = (ids: readonly string[], costs?: Record<string, number> | null) =>
+  ids.reduce((n, id) => n + (costs?.[id] ?? POWERS.find((p) => p.id === id)?.cost ?? 0), 0);
 export const powerById = (id: string) => POWERS.find((p) => p.id === id)!;
 export const isDefence = (id: string) => id === 'shield' || id === 'bounce';
 /** Letters Forced first can pick (the server refuses Q, X and Z). */
