@@ -232,7 +232,7 @@ function TelegramInvites() {
   );
 }
 
-/** v1.23: Settings › Sabotage mode: coins to spend, what each power costs, which are allowed. Shared by the room. */
+/** v1.23: Settings › Sabotage mode: what each power costs and which are allowed (v1.24: the coins moved to the waiting room). Shared by the room. */
 function SabotageSettings() {
   const { slot, players, ping, reportError } = useStore();
   const [set, setSet] = useState<SabSettings | null>(null);
@@ -257,32 +257,23 @@ function SabotageSettings() {
     }, 600);
   }
   if (!set) return null;
-  const budget = (d: number) => change({ ...set, budget: Math.min(30, Math.max(1, set.budget + d)) });
   const cost = (id: PowerId, d: number) => change({ ...set, costs: { ...set.costs, [id]: Math.min(10, Math.max(0, set.costs[id] + d)) } });
   const allow = (id: PowerId) => {
     const on = set.allowed.includes(id);
     if (on && set.allowed.length === 1) return;
     change({ ...set, allowed: on ? set.allowed.filter((x) => x !== id) : POWERS.map((p) => p.id).filter((x) => x === id || set.allowed.includes(x)) });
   };
-  const isDefault = set.budget === 8 && set.allowed.length === POWERS.length && POWERS.every((p) => set.costs[p.id] === set.defaults[p.id]);
+  const isDefault = set.allowed.length === POWERS.length && POWERS.every((p) => set.costs[p.id] === set.defaults[p.id]);
   const by = set.changed_by ? players[set.changed_by]?.name : null;
   return (
     <section className="card sab-settings">
       <button className="sab-settings-head" onClick={() => setOpen((x) => !x)} aria-expanded={open}>
         <h3>Sabotage mode 😈</h3>
-        <span className="muted small">🪙 {set.budget} · {set.allowed.length} powers {open ? '▴' : '▾'}</span>
+        <span className="muted small">{set.allowed.length} powers {open ? '▴' : '▾'}</span>
       </button>
       {open && (
         <>
-          <p className="muted small">Shared with {partner?.name ?? 'your partner'}: it applies to both of you from the next pick. Each of you picks up to three powers that fit the coins.</p>
-          <div className="sab-budget">
-            <span>Coins each</span>
-            <div className="stepper">
-              <button className="btn soft small" onClick={() => budget(-1)} aria-label="Fewer coins">−</button>
-              <b aria-live="polite">🪙 {set.budget}</b>
-              <button className="btn soft small" onClick={() => budget(1)} aria-label="More coins">+</button>
-            </div>
-          </div>
+          <p className="muted small">Shared with {partner?.name ?? 'your partner'}: it applies to both of you from the next pick. The coins for a round are set by whoever starts it, in the waiting room.</p>
           <ul className="sab-power-list">
             {POWERS.map((p) => {
               const on = set.allowed.includes(p.id);
@@ -304,7 +295,7 @@ function SabotageSettings() {
           </ul>
           <div className="sab-settings-foot">
             {by && set.changed_at && !isDefault && <span className="muted small">Last changed by {by}</span>}
-            <button className="btn text small" disabled={isDefault} onClick={() => change({ ...set, budget: 8, allowed: POWERS.map((p) => p.id), costs: { ...set.defaults } })}>Back to the defaults</button>
+            <button className="btn text small" disabled={isDefault} onClick={() => change({ ...set, allowed: POWERS.map((p) => p.id), costs: { ...set.defaults } })}>Back to the defaults</button>
           </div>
         </>
       )}
@@ -361,6 +352,8 @@ export function SettingsScreen() {
     <div className="screen scroll">
       <TopBar title="Settings" />
 
+      {/* v1.25: grouped, so things are easier to find. */}
+      <h2 className="settings-group">Players</h2>
       <section className="card">
         <h3>Who's playing on this phone?</h3>
         <PlayerPicker value={slot} onChange={(s) => { chooseSlot(s); toast(`This phone plays as ${players[s].name}`); }} />
@@ -373,12 +366,15 @@ export function SettingsScreen() {
         <ProfileRow slot={2} />
       </section>
 
+      <h2 className="settings-group">Game</h2>
       <ClassicWords />
-
-      <TelegramInvites />
 
       <SabotageSettings />
 
+      <h2 className="settings-group">Notifications</h2>
+      <TelegramInvites />
+
+      <h2 className="settings-group">Look and feel</h2>
       <section className="card">
         <h3>Appearance</h3>
         <div className="segmented">
@@ -393,8 +389,9 @@ export function SettingsScreen() {
 
       <KeyboardSize />
 
+      <h2 className="settings-group">This phone</h2>
       <section className="card">
-        <h3>This phone</h3>
+        <h3>App</h3>
         <p className="muted small">Live sync: {realtime ? 'connected' : 'reconnecting (updates every few seconds)'} · Version {APP_VERSION}</p>
         <button className="btn text small" onClick={() => go('/versions')}>Version history</button>
       </section>

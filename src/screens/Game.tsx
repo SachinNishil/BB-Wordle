@@ -114,18 +114,13 @@ export function GameScreen({ id }: { id?: string }) {
   useSabNews(sabotage ? game : null, slot, partner);
   const sabRef = useRef(incoming);
   sabRef.current = incoming;
-  // Ghost letter types itself in (once); Forced first puts its letter first.
-  const ghost = phase === 'playing' ? incoming.has('ghost') : null;
-  const ghostDone = useRef<number | null>(null);
-  useEffect(() => {
-    if (!ghost || ghostDone.current === ghost.id) return;
-    ghostDone.current = ghost.id;
-    const l = 'ABCDEFGHIJKLMNOPRSTUVWY'[Math.floor(Math.random() * 23)];
-    setTyped((t) => (t.length < 5 ? t + l : t));
-  }, [ghost]);
+  // Forced first (v1.25): whatever they were typing goes, and the row starts with the letter.
   const forced = phase === 'playing' ? incoming.has('first') : null;
+  const forcedDone = useRef<number | null>(null);
   useEffect(() => {
-    if (forced?.letter && !typed.startsWith(forced.letter)) setTyped((t) => (forced.letter! + t).slice(0, 5));
+    if (!forced?.letter) return;
+    if (forcedDone.current !== forced.id) { forcedDone.current = forced.id; setTyped(forced.letter); return; }
+    if (!typed.startsWith(forced.letter)) setTyped(forced.letter);
   }, [forced?.id, typed]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // v1.20: the waiting room is back (it lives right here, for all three modes).
@@ -335,7 +330,19 @@ export function GameScreen({ id }: { id?: string }) {
     setSubmitting(true);
     const row = game.me.guess_count;
     try {
-      const r = await api.submitGuess(slot, game.id, word, row + 1);
+      // v1.25: a shaky connection gets two quiet retries before we bother you. If a retry
+      // finds the guess already went in (stale_attempt), it simply shows up.
+      let r: Awaited<ReturnType<typeof api.submitGuess>> | null = null;
+      for (let i = 0; ; i++) {
+        try {
+          r = await api.submitGuess(slot, game.id, word, row + 1);
+          break;
+        } catch (e) {
+          if (e instanceof ApiError && e.network && i < 2) { await new Promise((ok) => setTimeout(ok, 900 * (i + 1))); continue; }
+          if (i > 0 && e instanceof ApiError && e.code === 'stale_attempt') { setTyped(''); void reload(); return; }
+          throw e;
+        }
+      }
       setTyped('');
       setRevealRow(row);
       if (r.game?.status === 'completed') {
@@ -419,9 +426,7 @@ export function GameScreen({ id }: { id?: string }) {
         const L = k.toUpperCase();
         const ban = sab.has('ban');
         if (ban && ban.letter === L) { navigator.vibrate?.(60); return; }
-        const sticky = sab.has('sticky');
-        const add = sticky && sticky.letter === L ? L + L : L;
-        setTyped((t) => (t + add).slice(0, 5));
+        setTyped((t) => (t + L).slice(0, 5));
       }
     },
     [phase, submitting, revealing, submit, picking, submitPick],
@@ -520,7 +525,7 @@ export function GameScreen({ id }: { id?: string }) {
           <h1 className="topbar-title">Game #{game.number}</h1>
           <div className="topbar-right" />
         </header>
-        <ResultsView data={fromGameView(game)} isToday />
+        <ResultsView data={fromGameView(game)} isToday me={slot} />
         <div className="stack pad">
           {slot && <TrashTalk game={game} slot={slot} players={players} onGame={apply} variant="card" />}
           <div className="rematch">
@@ -553,6 +558,8 @@ export function GameScreen({ id }: { id?: string }) {
             <span className={`room-seat${partnerIn ? ' in' : ''}`}><Avatar player={partner} size={84} ring={partnerIn} />{partnerIn && <span className="room-tick">✓</span>}</span>
           </div>
           <h2 className="waiting-title" role="status">{partnerIn ? (game.mode === 'challenge' ? 'Both in!' : ready ? 'Starting…' : 'Both in!') : <>Waiting for {partner.name}<span className="room-dots" aria-hidden="true"><i /><i /><i /></span></>}</h2>
+          {/* v1.25: they were in the room and left. */}
+          {!!game.partner.joined_at && !game.partner.here && <p className="room-out" role="status">🚪 {partner.name} stepped out</p>}
           {sabotage && slot && <PowerPicker game={game} slot={slot} partner={partner} onGame={apply} />}
           <button className="btn text" onClick={cancel} disabled={busy}>Cancel</button>
         </div>

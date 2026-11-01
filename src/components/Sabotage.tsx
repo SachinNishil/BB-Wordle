@@ -30,10 +30,36 @@ export function PowerPicker({ game, slot, partner, onGame }: { game: GameView; s
   }
   // v1.23: budget, costs and allowed powers come from Settings › Sabotage mode.
   const set = game.sab?.settings;
-  const budget = set?.budget ?? BUDGET;
+  // v1.24: this round's coins, set in this room by whoever started the round.
+  const budget = game.sab?.budget ?? set?.budget ?? BUDGET;
+  const mineToSet = game.sab?.budget_by === slot;
   const costs = set?.costs;
   const cost = (id: PowerId) => costs?.[id] ?? powerById(id).cost;
-  const allowed = POWERS.filter((p) => !set?.allowed || set.allowed.includes(p.id));
+  // Cheapest first (v1.24).
+  const allowed = POWERS.filter((p) => !set?.allowed || set.allowed.includes(p.id))
+    .map((p, i) => ({ p, i })).sort((x, y) => cost(x.p.id) - cost(y.p.id) || x.i - y.i).map((x) => x.p);
+  async function setBudget(d: number) {
+    const next = Math.min(30, Math.max(1, budget + d));
+    if (next === budget) return;
+    try {
+      const r = await api.sabotageBudget(slot, game.id, next);
+      if (r.game) onGame(r.game);
+      ping('game', 'joined');
+    } catch (e) {
+      reportError(e);
+    }
+  }
+  const coinsRow = (
+    <div className={`round-coins${mineToSet ? '' : ' locked'}`}>
+      <span className="round-coins-label">Coins this round</span>
+      <div className="stepper">
+        <button className="btn soft small" onClick={() => setBudget(-1)} disabled={!mineToSet || budget <= 1} aria-label="Fewer coins this round">−</button>
+        <b aria-live="polite">🪙 {budget}</b>
+        <button className="btn soft small" onClick={() => setBudget(1)} disabled={!mineToSet || budget >= 30} aria-label="More coins this round">+</button>
+      </div>
+      {!mineToSet && <span className="round-coins-by">set by {partner.name}</span>}
+    </div>
+  );
   const spent = costOf(sel, costs);
   const fits = (id: PowerId) => sel.length < 3 && spent + cost(id) <= budget;
   const toggle = (id: PowerId) => setSel((s) => (s.includes(id) ? s.filter((x) => x !== id) : fits(id) ? [...s, id] : s));
@@ -42,6 +68,7 @@ export function PowerPicker({ game, slot, partner, onGame }: { game: GameView; s
   if (mine && !picking) {
     return (
       <div className="power-pick done">
+        {coinsRow}
         <p className="eyebrow">Your powers</p>
         <div className="power-hand">{mine.map((id) => <PowerCard key={id} id={id} cost={cost(id)} />)}</div>
         <p className="muted small">🪙 {costOf(mine, costs)} of {budget} coins</p>
@@ -53,6 +80,7 @@ export function PowerPicker({ game, slot, partner, onGame }: { game: GameView; s
   if (!picking) {
     return (
       <div className="power-pick">
+        {coinsRow}
         <p className="eyebrow">Your powers</p>
         <div className="power-choice">
           <button className="btn primary" onClick={() => save(null)} disabled={busy}>🎲 At random</button>
@@ -64,6 +92,7 @@ export function PowerPicker({ game, slot, partner, onGame }: { game: GameView; s
   }
   return (
     <div className="power-pick picking">
+      {coinsRow}
       <div className="power-pick-head">
         <p className="eyebrow">Up to 3 · {sel.length}/3 · <span className={`coins${spent === budget ? ' full' : ''}`}>🪙 {budget - spent} left</span></p>
         <button className="btn text small" onClick={() => { setPicking(false); setSel([]); }}>Back</button>
@@ -79,7 +108,7 @@ export function PowerPicker({ game, slot, partner, onGame }: { game: GameView; s
           </button>
         ))}
       </div>
-      <button className="btn primary big power-go" onClick={() => save(sel)} disabled={busy || sel.length === 0}>
+      <button className="btn primary big power-go" onClick={() => save(sel)} disabled={busy || sel.length === 0 || spent > budget}>
         {sel.length === 0 ? 'PICK UP TO 3' : sel.length === 1 ? 'USE THIS ONE' : sel.length === 2 ? 'USE THESE TWO' : 'USE THESE THREE'}
       </button>
     </div>
@@ -200,7 +229,7 @@ export function useSabNews(game: GameView | null, slot: Slot | null, partner: Pl
       const p = powerById(e.power);
       if (e.to === slot && e.from !== slot && !e.blocked) {
         navigator.vibrate?.([50, 40, 50]);
-        toast(e.bounced ? `🪃 Bounced back! Your ${p.name} hit you` : `${p.emoji} ${partner.name} hit you with ${p.name}${e.letter && e.power !== 'sticky' ? `: ${e.letter}` : ''}`, 'error');
+        toast(e.bounced ? `🪃 Bounced back! Your ${p.name} hit you` : `${p.emoji} ${partner.name} hit you with ${p.name}${e.letter ? `: ${e.letter}` : ''}`, 'error');
       } else if (e.to === slot && e.blocked) {
         toast(`🛡️ Your shield blocked ${partner.name}'s ${p.name}`, 'win');
       }
@@ -210,7 +239,7 @@ export function useSabNews(game: GameView | null, slot: Slot | null, partner: Pl
 
 const UNTIL: Partial<Record<PowerId, string>> = {
   fog: 'until your next guess', mirror: 'until your next guess', ban: 'for your next guess', shuffle: 'for your next guess',
-  sticky: 'for your next guess', ghost: '', blind: 'for your next two guesses', liar: 'in your next row', delay: 'on your next guess',
+  sticky: '', blind: 'for your next two guesses', liar: 'in your next row', delay: 'on your next guess',
   amnesia: 'for your next guess', first: 'on your next guess', speed: '', steal: '',
 };
 
@@ -221,7 +250,7 @@ export function SabBanner({ incoming, partner }: { incoming: ReturnType<typeof u
   const p = powerById(e.power);
   let text = `${p.name} ${UNTIL[e.power] ?? ''}`.trim();
   if (e.power === 'ban') text = `${e.letter} is banned for your next guess`;
-  if (e.power === 'sticky') text = `${e.letter} is sticky: it types twice`;
+  if (e.power === 'sticky') text = 'Your next guess has to use a letter twice';
   if (e.power === 'first') text = `Your next guess must start with ${e.letter}`;
   if (e.expires_at) text += ` · ${Math.max(0, Math.ceil((Date.parse(e.expires_at) - incoming.now) / 1000))}s`;
   if (e.power === 'speed') {

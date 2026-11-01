@@ -23,8 +23,7 @@ export const POWERS: Power[] = [
   { id: 'mirror', emoji: '🪞', name: 'Mirror', what: 'Their board shows back to front for one guess', group: 'Screen', cost: 2 },
   { id: 'ban', emoji: '🚫', name: 'Banned letter', what: 'A letter they need is locked for one guess', group: 'Keyboard', cost: 3 },
   { id: 'shuffle', emoji: '🔀', name: 'Shuffle', what: 'Their keyboard letters swap places for one guess', group: 'Keyboard', cost: 2 },
-  { id: 'sticky', emoji: '🍯', name: 'Sticky key', what: 'One letter types twice for one guess', group: 'Keyboard', cost: 1 },
-  { id: 'ghost', emoji: '👻', name: 'Ghost letter', what: 'A random letter types itself into their row', group: 'Keyboard', cost: 1 },
+  { id: 'sticky', emoji: '🍯', name: 'Sticky key', what: 'Their next guess has to use a letter twice', group: 'Keyboard', cost: 1 },
   { id: 'blind', emoji: '🙈', name: 'Colour blind', what: 'Their next two guesses show grey; colours come back after the third', group: 'Colours', cost: 5 },
   { id: 'liar', emoji: '🤥', name: 'Liar tile', what: 'One tile in their next row shows the wrong colour', group: 'Colours', cost: 4 },
   { id: 'delay', emoji: '⏳', name: 'Delayed reveal', what: "Their next guess doesn't show colours until they play another", group: 'Colours', cost: 3 },
@@ -39,7 +38,9 @@ export const POWERS: Power[] = [
 
 export const costOf = (ids: readonly string[], costs?: Record<string, number> | null) =>
   ids.reduce((n, id) => n + (costs?.[id] ?? POWERS.find((p) => p.id === id)?.cost ?? 0), 0);
-export const powerById = (id: string) => POWERS.find((p) => p.id === id)!;
+/** Powers that have been retired, so old rounds still read right. */
+const RETIRED: Power[] = [{ id: 'ghost', emoji: '👻', name: 'Ghost letter', what: 'Retired', group: 'Keyboard', cost: 1 }];
+export const powerById = (id: string) => POWERS.find((p) => p.id === id) ?? RETIRED.find((p) => p.id === id) ?? { ...RETIRED[0], id: id as PowerId, emoji: '✨', name: id };
 export const isDefence = (id: string) => id === 'shield' || id === 'bounce';
 /** Letters Forced first can pick (the server refuses Q, X and Z). */
 export const FIRST_LETTERS = [...'ABCDEFGHIJKLMNOPRSTUVWY'];

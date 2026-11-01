@@ -1167,3 +1167,46 @@ html.sab-dark-on, html.sab-dark-on body, html.sab-dark-on .screen { touch-action
 .sab-power-emoji { font-size: 1.15rem; }
 .sab-power-name { font-weight: 700; font-size: 0.92rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sab-settings-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+
+/* v1.24: this round's coins, in the waiting room (greyed out for the one who didn't start it) */
+.round-coins { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; width: 100%; padding: 10px 12px; border-radius: 14px; background: var(--surface); box-shadow: var(--shadow); }
+.round-coins-label { font-weight: 800; font-size: 0.9rem; }
+.round-coins.locked { opacity: 0.55; }
+.round-coins-by { width: 100%; text-align: right; font-size: 0.75rem; color: var(--ink-3); margin-top: -4px; }
+
+/* v1.25: Sabotage battle log on the results */
+.battle-log { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); padding: 14px; }
+.battle-log .eyebrow { margin: 0 0 8px; }
+.battle-log ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.battle-log li { display: flex; align-items: center; gap: 10px; font-size: 0.88rem; }
+.battle-log .bl-emoji { font-size: 1.2rem; width: 26px; text-align: center; flex: none; }
+.battle-log .bl-text { flex: 1; min-width: 0; }
+.battle-log .bl-when { font-size: 0.72rem; color: var(--ink-3); font-weight: 700; flex: none; }
+.battle-log li.blocked .bl-text { color: var(--ink-2); }
+
+/* v1.25: mode tags on past rounds */
+.history-wordline { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.mode-tag { display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: 999px; font-size: 0.68rem; font-weight: 800; background: var(--surface-2); color: var(--ink-2); white-space: nowrap; }
+.mode-tag.challenge { color: var(--p2); }
+.mode-tag.endless { color: var(--p1); }
+.mode-tag.sabotage { color: var(--danger); }
+.room-out { margin: -6px 0 0; padding: 6px 12px; border-radius: 999px; background: color-mix(in srgb, var(--yellow) 16%, var(--surface)); font-size: 0.85rem; font-weight: 700; }
+.settings-group { margin: 22px 4px 0 !important; font-size: 0.78rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3); }
+.screen.scroll > .settings-group + * { margin-top: 8px; }
+
+/* v1.25: who won, at a glance */
+.outcome-banner {
+  align-self: center; display: inline-flex; align-items: center; gap: 8px; padding: 10px 22px; border-radius: 999px;
+  font-family: var(--font-display); font-size: 1.6rem; font-weight: 700; animation: outcome-in 600ms cubic-bezier(.2, 1.4, .4, 1) both;
+}
+.outcome-banner.won { background: var(--green); color: #fff; box-shadow: 0 12px 30px -10px color-mix(in srgb, var(--green) 80%, #000); }
+.outcome-banner.lost { background: var(--surface-2); color: var(--ink-2); font-size: 1.25rem; }
+.outcome-banner.even { background: var(--surface-2); color: var(--ink); font-size: 1.25rem; }
+@keyframes outcome-in { from { transform: scale(0.4); opacity: 0; } }
+.results { position: relative; }
+.confetti { position: fixed; inset: 0; z-index: 60; pointer-events: none; overflow: hidden; }
+.confetti i { position: absolute; top: -20px; display: block; opacity: 0.95; animation: confetti-fall linear forwards; }
+@keyframes confetti-fall {
+  0% { transform: translate(0, 0) rotate(0); }
+  100% { transform: translate(var(--dx), 105vh) rotate(var(--spin)); opacity: 0.9; }
+}

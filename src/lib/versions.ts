@@ -9,6 +9,30 @@ export interface Release {
 
 export const VERSIONS: Release[] = [
   {
+    version: '1.25.0',
+    date: '2026-11-01',
+    changes: [
+      'When a round ends you see straight away who won: "🎉 You won!" with confetti for the winner, and a "Menaka won this one" (or Sachin) banner for the other.',
+      'Sabotage results now have a battle log: who hit whom with what, on which guess, and what got blocked or bounced.',
+      'Steal a row shows on the results as /5 🦝 instead of /6.',
+      'Three Sabotage awards in the Hall of fame: Chief Saboteur, Iron Wall and Unbreakable.',
+      'History and Home\'s recent games show which mode each round was.',
+      'Waiting room: you\'re told when the other one steps out.',
+      'A guess that fails on a shaky connection is quietly retried twice before you see an error.',
+      'Settings are grouped: Players, Game, Notifications, Look and feel, This phone.',
+      'Sticky key now means their next guess has to use a letter twice. Ghost letter is gone. Forced first clears whatever they were typing and puts the letter in first.',
+    ],
+  },
+  {
+    version: '1.24.0',
+    date: '2026-10-30',
+    changes: [
+      'Sabotage: the coins for a round are now set in the waiting room by whoever started it (the other one sees it greyed out). If a hand no longer fits after a change, that player picks again. The next round starts on the last choice.',
+      'Settings › Sabotage mode keeps what each power costs and which are allowed.',
+      'Powers are listed cheapest first when you pick.',
+    ],
+  },
+  {
     version: '1.23.0',
     date: '2026-10-30',
     changes: [

@@ -7,6 +7,7 @@ import { fmtDate } from '../lib/clock';
 import { go } from '../router';
 import { useStore } from '../store';
 import { historyLine } from './Home';
+import { ModeTag } from '../components/ModeTag';
 
 export function HistoryScreen() {
   const { history, players, refreshHistory } = useStore();
@@ -49,7 +50,7 @@ export function HistoryScreen() {
                         <small>{fmtDate(g.completed_at, { weekday: 'short' })}</small>
                       </span>
                       <span className="history-main">
-                        <GameWords game={g} size={24} />
+                        <span className="history-wordline"><GameWords game={g} size={24} /><ModeTag mode={g.mode} /></span>
                         <span className="history-lines">
                           <span className="history-top">{line.top}</span>
                           {line.bottom && <span className="history-bottom">{line.bottom}</span>}

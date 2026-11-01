@@ -38,6 +38,7 @@ const FRIENDLY: Record<string, string> = {
   dictionary_outdated: 'The word list needs updating. Run the new dictionary.sql in Supabase.',
   bad_status: 'Keep it to 80 characters.',
   too_many_guesses: "That's 100 guesses. Time to give up?",
+  needs_double: 'Sticky key 🍯: this guess has to use a letter twice',
   frozen: "You're frozen ❄️ Hang on a few seconds.",
   banned_letter: 'That letter is banned for this guess 🚫',
   forced_letter: 'Your guess has to start with the forced letter',
@@ -49,6 +50,7 @@ const FRIENDLY: Record<string, string> = {
   not_playing: 'Powers only work while you are playing',
   already_armed: 'You already have a defence armed',
   pick_three: 'Pick up to three different powers',
+  not_your_round: 'Only the one who started this round sets its coins',
   power_not_allowed: "That power is switched off in Settings",
   bad_budget: 'Coins have to be between 1 and 30',
   bad_cost: 'A power costs 0 to 10 coins',
@@ -118,6 +120,8 @@ export const api = {
   getSabotageSettings: () => call<SabSettings>('get_sabotage_settings', { ...K }),
   setSabotageSettings: (slot: Slot, budget: number, costs: Partial<Record<PowerId, number>>, allowed: PowerId[] | null) =>
     call<SabSettings>('set_sabotage_settings', { ...K, p_slot: slot, p_budget: budget, p_costs: costs, p_allowed: allowed }),
+  sabotageBudget: (slot: Slot, gameId: string, budget: number) =>
+    call<GameState>('sabotage_budget', { ...K, p_slot: slot, p_game_id: gameId, p_budget: budget }),
   sabotageSend: (slot: Slot, gameId: string, power: PowerId, letter: string | null = null) =>
     call<GameState & { blocked?: boolean; bounced?: boolean }>('sabotage_send', { ...K, p_slot: slot, p_game_id: gameId, p_power: power, p_letter: letter }),
   lobby: (slot: Slot, gameId: string, here = true) =>

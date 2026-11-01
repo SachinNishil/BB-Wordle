@@ -153,6 +153,9 @@ export interface SabSettings {
 
 export interface SabView {
   settings?: SabSettings;
+  /** v1.24: this round's coins, set by whoever started it (budget_by). */
+  budget?: number;
+  budget_by?: Slot;
   powers: PowerId[] | null;
   used: PowerId[];
   partner_ready: boolean;
@@ -180,6 +183,19 @@ export interface HistoryPlayer {
   finished_at: string | null;
   gave_up: boolean;
   guesses: GuessRow[];
+  max_guesses?: number;
+}
+
+/** v1.25: one line of a Sabotage round's battle log. */
+export interface SabLogItem {
+  from: Slot;
+  to: Slot;
+  power: PowerId;
+  letter: string | null;
+  sent_guess: number;
+  blocked: boolean;
+  bounced: boolean;
+  at: string;
 }
 
 export interface HistoryGame {
@@ -198,6 +214,7 @@ export interface HistoryGame {
   winner: Slot | null;
   result: GameResult;
   players: HistoryPlayer[];
+  sabotages?: SabLogItem[] | null;
 }
 
 export interface WordRow {

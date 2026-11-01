@@ -1,3 +1,4 @@
+import { ModeTag } from '../components/ModeTag';
 import { PlayModes, SoloRow } from '../components/PlayModes';
 import { useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { Avatar } from '../components/Avatar';
@@ -331,7 +332,7 @@ export function Home() {
                   <button className="recent-row" onClick={() => go(`/history/${g.id}`)}>
                     <span className="recent-date">{fmtDate(g.completed_at, { day: 'numeric', month: 'short' })}</span>
                     <span className="recent-main">
-                      <GameWords game={g} size={22} />
+                      <span className="history-wordline"><GameWords game={g} size={22} /><ModeTag mode={g.mode} /></span>
                       <span className="recent-line">{line.top}{line.bottom ? <span className="recent-sub"> · {line.bottom}</span> : null}</span>
                     </span>
                     <Icon name="chevron" size={18} />

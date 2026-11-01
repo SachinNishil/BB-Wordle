@@ -341,5 +341,20 @@ export function moreAwards(games: HistoryGame[], names: Record<Slot, string>, fm
   for (const e of perDay) if (!busy || e[1] > busy[1]) busy = e;
   if (busy && busy[1] > 1) out.push({ id: 'busiest', emoji: '🗓️', title: 'Busiest Day', holder: null, value: `${busy[1]} battles`,
     detail: new Date(busy[0] * 86400000).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }) });
+  // v1.25 Sabotage awards (from each round's battle log).
+  const sab = games.filter((g) => g.mode === 'sabotage');
+  if (sab.length) {
+    const logs = sab.flatMap((g) => (g.sabotages ?? []).map((e) => ({ ...e, g })));
+    const landed = both((s) => logs.filter((e) => e.from === s && e.to !== s && !e.blocked && !e.bounced).length);
+    if (landed[1] + landed[2] > 0) pick('sab-landed', '😈', 'Chief Saboteur', landed, true, `Powers that landed · ${tally(names, landed)}`);
+    const saves = both((s) => logs.filter((e) => e.to === s && e.from !== s && e.blocked).length
+      + logs.filter((e) => e.bounced && e.from === s).length);
+    if (saves[1] + saves[2] > 0) pick('sab-saves', '🛡️', 'Iron Wall', saves, true, `Sabotages blocked or bounced back · ${tally(names, saves)}`);
+    // Comeback: won a Sabotage round after taking at least two hits in it.
+    const comeback = both((s) => sab.filter((g) => g.winner === s
+      && (g.sabotages ?? []).filter((e) => e.to === s && e.from !== s && !e.blocked).length >= 2).length);
+    if (comeback[1] + comeback[2] > 0) pick('sab-comeback', '💪', 'Unbreakable', comeback, true, `Won a Sabotage round after 2+ hits · ${tally(names, comeback)}`);
+  }
+
   return out;
 }

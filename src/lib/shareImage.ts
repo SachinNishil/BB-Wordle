@@ -190,7 +190,7 @@ export async function renderResultImage(d: ResultData, players: Record<Slot, Pla
     ctx.textAlign = 'right';
     ctx.fillStyle = C.ink;
     ctx.font = `800 34px ${UI}`;
-    const of = d.mode === 'endless' ? ' guesses' : '/6';
+    const of = d.mode === 'endless' ? ' guesses' : `/${side.max_guesses ?? 6}`;
     const score = side.status === 'solved' ? `${side.guess_count}${of}` : side.gave_up ? 'Gave up' : `X${of}`;
     ctx.fillText(score, x0 + colW, 404);
     ctx.fillStyle = C.ink2;
